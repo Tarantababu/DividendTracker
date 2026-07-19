@@ -18,9 +18,14 @@ export async function GET() {
   const events: PortfolioEvent[] = [];
   const notes: string[] = [];
 
-  // Dividends — from the existing local cache
+  // The three histories hit separate T212 endpoints with independent rate limits —
+  // sync them in parallel so a cold cache stays well inside serverless time limits.
+  const [dividendsR, txR, ordersR] = await Promise.allSettled([syncDividends(false), syncTransactions(false), syncOrders(false)]);
+
+  // Dividends
   try {
-    const dividends = await syncDividends(false);
+    if (dividendsR.status === "rejected") throw dividendsR.reason;
+    const dividends = dividendsR.value;
     for (const d of dividends.items) {
       events.push({ date: d.paidOn.slice(0, 10), kind: "dividend", label: `${prettyTicker(d.ticker)} dividend`, amount: d.amount });
     }
@@ -30,7 +35,8 @@ export async function GET() {
 
   // Cash movements — deposits and withdrawals only; interest/fees are noise here
   try {
-    const tx = await syncTransactions(false);
+    if (txR.status === "rejected") throw txR.reason;
+    const tx = txR.value;
     for (const t of tx.items) {
       if (/^DEPOSIT/i.test(t.type)) {
         events.push({ date: t.dateTime.slice(0, 10), kind: "deposit", label: "Deposit", amount: Math.abs(t.amount) });
@@ -52,7 +58,8 @@ export async function GET() {
 
   // Order executions — one event per fill
   try {
-    const orders = await syncOrders(false);
+    if (ordersR.status === "rejected") throw ordersR.reason;
+    const orders = ordersR.value;
     for (const o of orders.items) {
       if (o.order.status !== "FILLED" && o.order.status !== "PARTIALLY_FILLED") continue;
       if (!o.fill?.filledAt) continue;

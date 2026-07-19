@@ -13,6 +13,15 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ week: stri
   const { week } = await ctx.params;
   if (!/^\d{4}-W\d{2}$/.test(week)) return NextResponse.json({ error: "BAD_WEEK" }, { status: 400 });
 
+  // Rendering + uploading are local-first: episodes and the pipeline's node_modules
+  // aren't deployed, so on Vercel this can only fail confusingly. Say so instead.
+  if (process.env.VERCEL) {
+    return NextResponse.json(
+      { error: "LOCAL_ONLY", message: "Episode rendering and YouTube upload run on your local machine (cd video && npm run episode -- --upload). The deployed site is a viewer." },
+      { status: 501 },
+    );
+  }
+
   const videoRoot = path.join(process.cwd(), "video");
   const episode = path.join(videoRoot, "episodes", week);
   try {
