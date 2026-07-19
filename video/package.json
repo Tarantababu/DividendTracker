@@ -1,0 +1,33 @@
+{
+  "name": "dividend-tracker-video",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Weekly FIRE-journey episode pipeline: app data -> Claude script -> TTS -> Remotion render -> YouTube draft",
+  "scripts": {
+    "episode": "tsx pipeline/run.ts",
+    "snapshot": "tsx pipeline/snapshot.ts",
+    "script": "tsx pipeline/script.ts",
+    "voice": "tsx pipeline/voice.ts",
+    "subtitles": "tsx pipeline/subtitles.ts",
+    "publish": "tsx pipeline/publish.ts",
+    "studio": "remotion studio remotion/index.ts",
+    "render": "tsx pipeline/render.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@googleapis/youtube": "^20.0.0",
+    "@remotion/bundler": "4.0.246",
+    "@remotion/cli": "4.0.246",
+    "@remotion/renderer": "4.0.246",
+    "google-auth-library": "^9.0.0",
+    "puppeteer-core": "^23.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "remotion": "4.0.246"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

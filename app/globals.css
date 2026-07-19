@@ -1,0 +1,87 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f6f7f9;
+  --surface: #eef0f4;
+  --card: #ffffff;
+  --card-hover: #f4f6f9;
+  --border: #e3e7ee;
+  --border-soft: #edf0f5;
+  --foreground: #171a21;
+  --muted: #5b6472;
+  --muted-2: #8a93a3;
+  --accent: #059669;
+  --accent-dim: rgba(5, 150, 105, 0.1);
+  --primary: #6d4aff;
+  --primary-dim: rgba(109, 74, 255, 0.1);
+  --blue: #38a6f8;
+  --blue-dim: rgba(56, 166, 248, 0.1);
+  --amber: #f5a623;
+  --red: #dc2626;
+  --violet: #8b5cf6;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-card: var(--card);
+  --color-card-hover: var(--card-hover);
+  --color-border: var(--border);
+  --color-border-soft: var(--border-soft);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-2: var(--muted-2);
+  --color-accent: var(--accent);
+  --color-primary: var(--primary);
+  --color-blue: var(--blue);
+  --color-amber: var(--amber);
+  --color-red: var(--red);
+  --color-violet: var(--violet);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+::selection {
+  background: var(--accent-dim);
+}
+
+/* Subtle scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+/* Scrollable nav pills: no scrollbar — its hit-area steals clicks from links.
+   Must live unlayered so it beats the * rule above (layered utilities lose to it). */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+@media print {
+  body {
+    background: #fff;
+  }
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+  section,
+  .rounded-2xl {
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
+}
