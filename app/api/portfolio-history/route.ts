@@ -3,13 +3,14 @@ import fs from "fs/promises";
 import path from "path";
 import { getPositions, T212Error } from "@/lib/t212";
 import { prettyTicker } from "@/lib/analytics";
+import { CACHE_DIR } from "@/lib/cacheDir";
 import type { Position } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)";
-const SYMBOL_MAP_FILE = path.join(process.cwd(), ".cache", "yahoo-symbols.json");
+const SYMBOL_MAP_FILE = path.join(CACHE_DIR, "yahoo-symbols.json");
 const RESULT_TTL_MS = 10 * 60 * 1000;
 
 export interface DayPoint {
@@ -223,7 +224,7 @@ export async function GET(req: NextRequest) {
   }
   const fillsByTicker = new Map<string, Fill[]>();
   try {
-    const raw = await fs.readFile(path.join(process.cwd(), ".cache", "orders.json"), "utf8");
+    const raw = await fs.readFile(path.join(CACHE_DIR, "orders.json"), "utf8");
     const parsed = JSON.parse(raw) as {
       items?: Array<{ order: { ticker: string; side: string; status?: string }; fill?: { quantity?: number; filledAt?: string; walletImpact?: { netValue?: number } } }>;
     };

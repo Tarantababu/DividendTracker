@@ -3,7 +3,7 @@ import path from "path";
 import type { AccountSummary, DividendItem, DividendsPayload, Position } from "./types";
 
 const HOST = process.env.T212_HOST ?? "https://live.trading212.com";
-const CACHE_DIR = path.join(process.cwd(), ".cache");
+import { CACHE_DIR } from "./cacheDir";
 const DIVIDENDS_CACHE = path.join(CACHE_DIR, "dividends.json");
 
 function authHeader(): string {

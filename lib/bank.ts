@@ -8,7 +8,7 @@ import fs from "fs/promises";
 import path from "path";
 
 const BASE = "https://bankaccountdata.gocardless.com/api/v2";
-const CACHE_DIR = path.join(process.cwd(), ".cache");
+import { CACHE_DIR } from "./cacheDir";
 const LINK_FILE = path.join(CACHE_DIR, "bank-link.json");
 const TX_FILE = path.join(CACHE_DIR, "bank-transactions.json");
 
