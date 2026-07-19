@@ -4,7 +4,7 @@ import path from "path";
 import { execFile } from "child_process";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 600; // a 40MB upload can take a while
+export const maxDuration = 300; // Vercel hobby cap; local dev has no limit anyway
 
 // Trigger the YouTube draft upload for one episode by running the pipeline's
 // publish stage headless. Requires the one-time terminal OAuth (loopback flow)
