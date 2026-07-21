@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { getAccountSummary, getPositions, T212Error } from "@/lib/t212";
 import { prettyTicker } from "@/lib/analytics";
-import { fetchFundInfo, resolveSymbol } from "@/lib/yahooFund";
-import type { LookThroughResult, LookThroughStock } from "@/lib/signals";
+import { fetchFundInfo, looksLikeFund, resolveSymbol } from "@/lib/yahooFund";
+import type { LookThroughResult, LookThroughStock, OpaqueFund } from "@/lib/signals";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -28,6 +28,7 @@ export async function GET() {
 
     const agg = new Map<string, Agg>();
     const unresolved: string[] = [];
+    const opaqueFunds: OpaqueFund[] = []; // funds we recognise but can't see inside
     let otherValue = 0; // ETF exposure beyond the top-10 (real, but not individually visible)
     let unclassifiedValue = 0; // positions we could not look through at all
     let resolvedEtfs = 0;
@@ -42,12 +43,24 @@ export async function GET() {
       agg.set(k, e);
     };
 
-    // Resolve + fetch fundamentals for every position (both cached aggressively)
+    // Resolve + fetch fundamentals for every position (both cached aggressively).
+    // If a fund resolves to a listing Yahoo won't decompose (e.g. a Chi-X line),
+    // try the common exchange listings until one returns actual holdings.
     const enriched = await Promise.all(
       positions.map(async (p) => {
         const guess = prettyTicker(p.instrument.ticker);
         const symbol = await resolveSymbol(p.instrument.name, guess);
-        const fund = await fetchFundInfo(symbol);
+        let fund = await fetchFundInfo(symbol);
+        if ((!fund || fund.holdings.length === 0) && looksLikeFund(p.instrument.name)) {
+          for (const cand of [guess, `${guess}.L`, `${guess}.DE`, `${guess}.AS`, `${guess}.MI`, `${guess}.PA`]) {
+            if (cand === symbol) continue;
+            const alt = await fetchFundInfo(cand);
+            if (alt && alt.holdings.length > 0) {
+              fund = alt;
+              break;
+            }
+          }
+        }
         return { p, guess, symbol, fund };
       }),
     );
@@ -56,7 +69,12 @@ export async function GET() {
       const value = p.walletImpact.currentValue;
       if (value <= 0) continue;
 
-      if (fund?.isEtf && fund.holdings.length > 0) {
+      // A holding is a fund if the data says so OR its name looks like one (Yahoo
+      // often misclassifies active/UCITS funds like JGGI as plain EQUITY).
+      const isFund = !!fund?.isEtf || looksLikeFund(p.instrument.name);
+
+      if (fund && fund.holdings.length > 0) {
+        // Decomposable ETF → split into its underlying stocks
         resolvedEtfs++;
         let covered = 0;
         for (const h of fund.holdings) {
@@ -64,17 +82,19 @@ export async function GET() {
           covered += h.weight;
         }
         otherValue += value * Math.max(0, 1 - covered); // remainder inside the ETF
-      } else if (fund && !fund.isEtf) {
-        // A single stock (or a fund Yahoo won't decompose) is its own 100% underlying
-        add(symbol || guess, p.instrument.name, value, { direct: true });
-      } else if (fund?.isEtf) {
-        // ETF we can't see inside (no holdings from Yahoo) — count as diversified other
+      } else if (isFund) {
+        // A fund we recognise but can't see inside — list it as a fund, never a stock
+        opaqueFunds.push({ name: p.instrument.name, ticker: guess, value, pct: total > 0 ? value / total : 0 });
         otherValue += value;
+      } else if (fund) {
+        // Genuine single stock → its own 100% underlying
+        add(symbol || guess, p.instrument.name, value, { direct: true });
       } else {
         unclassifiedValue += value;
         unresolved.push(prettyTicker(p.instrument.ticker));
       }
     }
+    opaqueFunds.sort((a, b) => b.value - a.value);
 
     const stocks: LookThroughStock[] = [...agg.entries()]
       .map(([symbol, e]) => ({
@@ -95,6 +115,7 @@ export async function GET() {
       otherPct,
       coveredPct: total > 0 ? 1 - unclassifiedValue / total : 0,
       resolvedEtfs,
+      opaqueFunds,
       unresolved,
       fetchedAt: new Date().toISOString(),
     };

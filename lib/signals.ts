@@ -105,6 +105,13 @@ export interface LookThroughStock {
   funds: string[]; // ETF symbols contributing via look-through
 }
 
+export interface OpaqueFund {
+  name: string;
+  ticker: string;
+  value: number;
+  pct: number; // value / invested total
+}
+
 export interface LookThroughResult {
   stocks: LookThroughStock[];
   currency: string;
@@ -112,6 +119,7 @@ export interface LookThroughResult {
   otherPct: number; // diversified remainder (ETF beyond top-10) + unclassified
   coveredPct: number; // share of the portfolio we could see through or hold directly
   resolvedEtfs: number;
+  opaqueFunds: OpaqueFund[]; // funds we recognised but couldn't decompose (no holdings from the data source)
   unresolved: string[]; // position names that could not be classified
   fetchedAt: string;
 }

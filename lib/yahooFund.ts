@@ -132,6 +132,16 @@ export async function fetchFundInfo(symbol: string): Promise<FundInfo | null> {
   return null;
 }
 
+// Fund/ETF providers + product words. Yahoo sometimes classifies active or UCITS
+// funds as plain EQUITY with no holdings module, so the name is a needed backstop
+// to avoid listing a fund as an "individual stock".
+const FUND_NAME = /\b(etf|etc|ucits|index fund|s&p|msci|nasdaq|ftse|stoxx|russell|covered call|dividend|aristocrat|quality income|equity premium|growth & income|bitcoin|ethereum|crypto)\b|\b(ishares|i shares|vanguard|spdr|global x|globalx|fidelity|jpmorgan|jp morgan|j\.p\. morgan|xtrackers|amundi|invesco|wisdomtree|vaneck|van eck|franklin|21shares|hsbc|lyxor|ubs|schwab|first trust|proshares)\b/i;
+
+/** Heuristic: does this instrument name look like a fund/ETF rather than a single company? */
+export function looksLikeFund(name: string): boolean {
+  return FUND_NAME.test(name || "");
+}
+
 /**
  * Resolve a holding to its Yahoo symbol via search. Prefers an exact match on the
  * ticker guess, else the first equity/ETF hit. Falls back to the guess itself.

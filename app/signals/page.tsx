@@ -505,11 +505,11 @@ export default function SignalsPage() {
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <div className="text-xs font-semibold uppercase tracking-wide text-muted-2">Look-through stock allocation</div>
             <div className="text-[11px] text-muted-2">
-              effective weight of each company across your {lookthrough.resolvedEtfs} ETFs + direct holdings
+              effective weight of each company, seen through your {lookthrough.resolvedEtfs} decomposable ETFs
             </div>
           </div>
           <p className="mt-1 text-[11px] text-muted-2">
-            Every position decomposed into the underlying stocks it actually holds, weighted by € invested — your real single-name exposure.
+            Your ETFs decomposed into the underlying stocks they actually hold, weighted by € invested — your real single-name exposure.
           </p>
           {(() => {
             const top = lookthrough.stocks.slice(0, 15);
@@ -545,6 +545,21 @@ export default function SignalsPage() {
               </div>
             );
           })()}
+          {lookthrough.opaqueFunds && lookthrough.opaqueFunds.length > 0 && (
+            <div className="mt-3 border-t border-border-soft pt-3">
+              <div className="text-[11px] font-medium text-muted">Funds we couldn&apos;t look inside</div>
+              <p className="text-[10px] text-muted-2">Active/UCITS funds whose holdings aren&apos;t published by our data source — shown as funds, not stocks, and counted in &ldquo;Other&rdquo;.</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {lookthrough.opaqueFunds.map((f) => (
+                  <span key={f.ticker} className="flex items-center gap-1.5 rounded-lg border border-border bg-surface px-2.5 py-1 text-xs" title={f.name}>
+                    <span className="rounded bg-[color-mix(in_srgb,var(--blue)_16%,transparent)] px-1.5 text-[10px] font-medium text-blue">ETF</span>
+                    <span className="font-semibold">{f.ticker}</span>
+                    <span className="num text-muted-2">{(f.pct * 100).toFixed(1)}%</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
           <p className="mt-2 text-[10px] text-muted-2">
             Of {formatMoney(lookthrough.totalValue, lookthrough.currency, 0)} invested, {(lookthrough.coveredPct * 100).toFixed(0)}% classified.
             &ldquo;Other&rdquo; is diversified fund exposure beyond each ETF&apos;s top-10.
