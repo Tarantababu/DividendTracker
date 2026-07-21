@@ -28,8 +28,16 @@ export interface Mover {
   dayChangePct: number; // fraction
 }
 
+export interface HoldingSeries {
+  t212Ticker: string;
+  ticker: string; // pretty
+  values: number[]; // aligned to history[].date
+  costs: number[]; // invested (cost basis) that day, aligned to history[].date
+}
+
 export interface PortfolioHistoryPayload {
   history: DayPoint[];
+  perHolding: HoldingSeries[]; // per-holding value + cost, lets the client rebuild any category's history
   today: {
     change: number;
     changePct: number;
@@ -293,9 +301,18 @@ export async function GET(req: NextRequest) {
   const initialCost = totalCurrentCost - allFills.reduce((a, f) => a + f.net, 0);
 
   // Portfolio series: value weighted by shares actually held that day; cost accrued
-  // from order fills. Two-pointer walks over date-sorted fills keep this O(n).
+  // from order fills. Two-pointer walks over date-sorted fills keep this O(n). Each
+  // holding also gets its own value + cost timeline so the client can rebuild any
+  // category's history by summing its members.
   const lastKnown = new Map<number, number>();
   const shareState = perHolding.map(() => ({ ptr: 0, running: 0 }));
+  // Per-holding cost baseline: work backward from the holding's current cost basis.
+  const holdCostState = perHolding.map((h) => ({
+    ptr: 0,
+    running: 0,
+    initial: h.p.walletImpact.totalCost - h.fills.reduce((a, f) => a + f.net, 0),
+  }));
+  const series: HoldingSeries[] = perHolding.map((h) => ({ t212Ticker: h.p.instrument.ticker, ticker: prettyTicker(h.p.instrument.ticker), values: [], costs: [] }));
   let costPtr = 0;
   let costRunning = 0;
   const history: DayPoint[] = [];
@@ -305,6 +322,8 @@ export async function GET(req: NextRequest) {
 
     let total = 0;
     let seen = 0;
+    const holdValues: number[] = [];
+    const holdCosts: number[] = [];
     perHolding.forEach((h, idx) => {
       const v = h.values.get(date);
       if (v != null) {
@@ -315,11 +334,21 @@ export async function GET(req: NextRequest) {
       while (st.ptr < h.fills.length && h.fills[st.ptr].date <= date) st.running += h.fills[st.ptr++].qty;
       const shares = h.initialShares + st.running;
       const frac = h.currentQty > 0 ? Math.max(0, shares / h.currentQty) : 1; // fraction of today's position held then
-      total += (lastKnown.get(idx) ?? 0) * frac;
+      const hv = (lastKnown.get(idx) ?? 0) * frac;
+      total += hv;
+      holdValues[idx] = Math.round(hv * 100) / 100;
+
+      const cs = holdCostState[idx];
+      while (cs.ptr < h.fills.length && h.fills[cs.ptr].date <= date) cs.running += h.fills[cs.ptr++].net;
+      holdCosts[idx] = Math.round(Math.max(0, cs.initial + cs.running) * 100) / 100;
     });
     // skip leading dates where less than half the portfolio has price data yet
     if (seen > 0 && lastKnown.size >= Math.max(1, Math.ceil(perHolding.length / 2))) {
       history.push({ date, value: Math.round(total * 100) / 100, cost: Math.round(Math.max(0, cost) * 100) / 100 });
+      perHolding.forEach((_, idx) => {
+        series[idx].values.push(holdValues[idx] ?? 0);
+        series[idx].costs.push(holdCosts[idx] ?? 0);
+      });
     }
   }
 
@@ -341,6 +370,7 @@ export async function GET(req: NextRequest) {
 
   const payload: PortfolioHistoryPayload = {
     history,
+    perHolding: series,
     today: { change, changePct, movers, asOf: new Date().toISOString() },
     unresolved,
     approximate: true,

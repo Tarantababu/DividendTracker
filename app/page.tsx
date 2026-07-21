@@ -15,6 +15,7 @@ import {
 import StatCard from "@/components/StatCard";
 import AllocationPlanner from "@/components/AllocationPlanner";
 import CategoryOverview from "@/components/CategoryOverview";
+import CategoryBreakdown from "@/components/CategoryBreakdown";
 import DailyStatus from "@/components/DailyStatus";
 import MonthlyChart from "@/components/MonthlyChart";
 import AllocationDonut from "@/components/AllocationDonut";
@@ -333,6 +334,9 @@ export default function Dashboard() {
           >
             <AllocationPlanner positions={positions} currency={cur} />
           </Section>
+        </div>
+        <div className="mt-4">
+          <CategoryBreakdown positions={positions} divStats={stats.divStats} currency={cur} />
         </div>
       </div>
 
