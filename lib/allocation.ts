@@ -129,6 +129,39 @@ export interface CategoryLookup {
   index: number;
 }
 
+// ---- Real Trading212 pies (authoritative category actuals) ------------------
+
+export interface PieLike {
+  name: string;
+  value: number;
+  invested: number;
+  result: number;
+  dividendGained: number;
+  cash: number;
+  instruments: { ticker: string; value: number; invested: number }[];
+}
+
+/** "Div. Growth (%60)" and "Div. Growth" both normalize equal, so a category name
+ *  matches its pie regardless of the "(%..)" suffix the pie name carries. */
+export const normalizePieName = (s: string) =>
+  s
+    .replace(/\(\s*%?\s*\d+\s*%?\s*\)/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+
+export function piesByCategoryName(pies: PieLike[]): Map<string, PieLike> {
+  return new Map(pies.map((p) => [normalizePieName(p.name), p]));
+}
+
+/** Total current value of a ticker across all pies — the denominator for its real
+ *  per-pie share (a ticker held in several pies splits by these actual values). */
+export function pieValueByTicker(pies: PieLike[]): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const p of pies) for (const ins of p.instruments) m.set(ins.ticker, (m.get(ins.ticker) ?? 0) + ins.value);
+  return m;
+}
+
 export interface TickerSplit {
   categoryIndex: number;
   name: string;

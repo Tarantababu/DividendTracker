@@ -1,8 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { Position } from "@/lib/types";
 import { formatMoney } from "@/lib/analytics";
-import { groupByCategory, useAllocation } from "@/lib/allocation";
+import { groupByCategory, piesByCategoryName, normalizePieName, CATEGORY_COLORS, useAllocation, type PieLike, type CategorySlice } from "@/lib/allocation";
 
 /**
  * Compact target-vs-actual view of the user's category allocation.
@@ -10,9 +11,35 @@ import { groupByCategory, useAllocation } from "@/lib/allocation";
  */
 export default function CategoryOverview({ positions, currency }: { positions: Position[]; currency: string }) {
   const { categories } = useAllocation();
+  const [pies, setPies] = useState<PieLike[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/pies");
+        if (!res.ok) return;
+        const payload = (await res.json()) as { pies: PieLike[] };
+        if (!cancelled) setPies(payload.pies ?? []);
+      } catch {
+        /* fall back to reconstructed split */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   if (categories.length === 0) return null;
 
-  const slices = groupByCategory(categories, positions);
+  // Use real pie values when a category matches a pie; else the reconstructed split.
+  const pieMap = pies ? piesByCategoryName(pies) : new Map<string, PieLike>();
+  const slices: CategorySlice[] = pies
+    ? categories.map((c, i) => {
+        const pie = pieMap.get(normalizePieName(c.name));
+        return { name: c.name, value: pie?.value ?? 0, color: CATEGORY_COLORS[i % CATEGORY_COLORS.length], targetPct: c.targetPct };
+      })
+    : groupByCategory(categories, positions);
   const total = slices.reduce((a, s) => a + s.value, 0);
   if (total <= 0) return null;
 

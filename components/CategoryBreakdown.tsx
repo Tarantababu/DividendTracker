@@ -5,7 +5,7 @@ import { Area, AreaChart, Line, ResponsiveContainer, Tooltip } from "recharts";
 import { formatMoney } from "@/lib/analytics";
 import type { TickerDividendStats } from "@/lib/analytics";
 import type { DividendItem, Position } from "@/lib/types";
-import { CATEGORY_COLORS, tickerSplits, useAllocation } from "@/lib/allocation";
+import { CATEGORY_COLORS, piesByCategoryName, pieValueByTicker, normalizePieName, tickerSplits, useAllocation, type PieLike } from "@/lib/allocation";
 import type { HoldingSeries } from "@/app/api/portfolio-history/route";
 
 interface HistoryPayload {
@@ -68,6 +68,7 @@ function MiniHistory({ series, color, currency }: { series: CatPoint[]; color: s
 export default function CategoryBreakdown({ positions, divStats, dividends, currency }: { positions: Position[]; divStats: TickerDividendStats[]; dividends: DividendItem[]; currency: string }) {
   const { categories } = useAllocation();
   const [data, setData] = useState<HistoryPayload | null>(null);
+  const [pies, setPies] = useState<PieLike[] | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -79,6 +80,17 @@ export default function CategoryBreakdown({ positions, divStats, dividends, curr
         if (!cancelled) setData(payload);
       } catch {
         /* history is optional enrichment */
+      }
+    })();
+    // Real pies give exact per-category actuals (value, invested, dividends)
+    (async () => {
+      try {
+        const res = await fetch("/api/pies");
+        if (!res.ok) return;
+        const payload = (await res.json()) as { pies: PieLike[] };
+        if (!cancelled) setPies(payload.pies ?? []);
+      } catch {
+        /* fall back to the allocation split */
       }
     })();
     return () => {
@@ -102,28 +114,54 @@ export default function CategoryBreakdown({ positions, divStats, dividends, curr
     }
     for (const arr of divsByTicker.values()) arr.sort((a, b) => a.date.localeCompare(b.date));
 
-    // Split each ticker's holding across the categories it belongs to (no double-counting)
+    // Prefer the real Trading212 pie for this category (exact per-ticker split);
+    // otherwise fall back to the intent-based allocation split.
+    const pieMap = pies ? piesByCategoryName(pies) : new Map<string, PieLike>();
+    const pieValueTotals = pies ? pieValueByTicker(pies) : new Map<string, number>();
     const splits = tickerSplits(categories);
-    const fractionOf = (ticker: string, catIdx: number) => splits.get(ticker)?.find((s) => s.categoryIndex === catIdx)?.fraction ?? 1;
+    const fallbackFraction = (ticker: string, catIdx: number) => splits.get(ticker)?.find((s) => s.categoryIndex === catIdx)?.fraction ?? 1;
 
     return categories.map((c, i) => {
       const color = CATEGORY_COLORS[i % CATEGORY_COLORS.length];
+      const pie = pieMap.get(normalizePieName(c.name));
+
+      // Each member's real share of its total holding that belongs to THIS category.
+      // From the pie when matched (ins.value / total pie value of that ticker), else intent split.
+      const members = c.members
+        .map((m) => m.t212Ticker)
+        .filter((t): t is string => !!t)
+        .map((t) => {
+          if (pie) {
+            const ins = pie.instruments.find((x) => x.ticker === t);
+            const tot = pieValueTotals.get(t) ?? 0;
+            return { t, frac: ins && tot > 0 ? ins.value / tot : 0 };
+          }
+          return { t, frac: fallbackFraction(t, i) };
+        });
+
       let value = 0;
       let invested = 0;
       let ttm = 0;
       let allDiv = 0;
-      // A ticker may sit in several categories — take only this category's share of it.
-      const members = c.members.map((m) => m.t212Ticker).filter((t): t is string => !!t).map((t) => ({ t, frac: fractionOf(t, i) }));
-      for (const { t, frac } of members) {
-        const p = posByTicker.get(t);
-        if (p) {
-          value += p.walletImpact.currentValue * frac;
-          invested += p.walletImpact.totalCost * frac;
-        }
-        const d = divByTicker.get(t);
-        if (d) {
-          ttm += d.ttm * frac;
-          allDiv += d.allTime * frac;
+      if (pie) {
+        // Exact top-line numbers straight from the pie
+        value = pie.value;
+        invested = pie.invested;
+        allDiv = pie.dividendGained;
+        // TTM income can't come from the pie summary — scale each member's TTM by its pie share
+        for (const { t, frac } of members) ttm += (divByTicker.get(t)?.ttm ?? 0) * frac;
+      } else {
+        for (const { t, frac } of members) {
+          const p = posByTicker.get(t);
+          if (p) {
+            value += p.walletImpact.currentValue * frac;
+            invested += p.walletImpact.totalCost * frac;
+          }
+          const d = divByTicker.get(t);
+          if (d) {
+            ttm += d.ttm * frac;
+            allDiv += d.allTime * frac;
+          }
         }
       }
 
@@ -166,7 +204,7 @@ export default function CategoryBreakdown({ positions, divStats, dividends, curr
         series,
       };
     });
-  }, [categories, positions, divStats, dividends, data]);
+  }, [categories, positions, divStats, dividends, data, pies]);
 
   if (stats.length === 0) return null;
 

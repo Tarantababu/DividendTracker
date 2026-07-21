@@ -55,6 +55,71 @@ export async function getPositions(): Promise<Position[]> {
   return t212Get<Position[]>("/api/v0/equity/positions");
 }
 
+// ---- Pies (the user's real Trading212 pies = their categories) --------------
+
+export interface PieInstrument {
+  ticker: string;
+  value: number; // current EUR value in this pie
+  invested: number; // cost basis in this pie
+  ownedQuantity: number;
+  currentShare: number; // fraction of the pie
+}
+
+export interface PieSummary {
+  id: number;
+  name: string;
+  value: number; // pie current value (excl. pie cash)
+  invested: number;
+  result: number; // unrealised P/L
+  resultCoef: number;
+  dividendGained: number; // dividends earned in this pie, all-time
+  cash: number; // uninvested cash sitting in the pie
+  instruments: PieInstrument[];
+}
+
+interface PieListItem {
+  id: number;
+  cash: number;
+  dividendDetails?: { gained?: number };
+  result: { priceAvgInvestedValue: number; priceAvgValue: number; priceAvgResult: number; priceAvgResultCoef: number };
+}
+
+interface PieDetail {
+  settings: { name: string };
+  instruments: Array<{ ticker: string; ownedQuantity: number; currentShare: number; result?: { priceAvgValue?: number; priceAvgInvestedValue?: number } }>;
+}
+
+/**
+ * All pies with their holdings — the authoritative per-category split, since a
+ * shared ticker's real share of each pie is exact here (no proportional guessing).
+ * One list call + one detail call per pie; paced by the shared 429 backoff.
+ */
+export async function getPies(): Promise<PieSummary[]> {
+  const list = await t212Get<PieListItem[]>("/api/v0/equity/pies");
+  const out: PieSummary[] = [];
+  for (const p of list) {
+    const detail = await t212Get<PieDetail>(`/api/v0/equity/pies/${p.id}`);
+    out.push({
+      id: p.id,
+      name: detail.settings?.name ?? `Pie ${p.id}`,
+      value: p.result.priceAvgValue,
+      invested: p.result.priceAvgInvestedValue,
+      result: p.result.priceAvgResult,
+      resultCoef: p.result.priceAvgResultCoef,
+      dividendGained: p.dividendDetails?.gained ?? 0,
+      cash: p.cash ?? 0,
+      instruments: (detail.instruments ?? []).map((i) => ({
+        ticker: i.ticker,
+        value: i.result?.priceAvgValue ?? 0,
+        invested: i.result?.priceAvgInvestedValue ?? 0,
+        ownedQuantity: i.ownedQuantity,
+        currentShare: i.currentShare,
+      })),
+    });
+  }
+  return out;
+}
+
 function dividendKey(d: DividendItem): string {
   return d.reference ?? `${d.ticker}|${d.paidOn}|${d.amount}|${d.quantity}`;
 }
