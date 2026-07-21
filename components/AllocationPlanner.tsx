@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatMoney, prettyTicker } from "@/lib/analytics";
 import type { Position } from "@/lib/types";
-import { loadAllocation, saveAllocation, type AllocationCategory as Category, type AllocationMember as Member } from "@/lib/allocation";
+import { loadAllocation, saveAllocation, tickerSplits, piesByCategoryName, normalizePieName, type AllocationCategory as Category, type AllocationMember as Member, type PieLike } from "@/lib/allocation";
 
 interface SearchResult {
   symbol: string;
@@ -56,6 +56,24 @@ export default function AllocationPlanner({ positions, currency }: { positions: 
     saveAllocation({ categories: cats, deposit: dep });
   }, []);
 
+  const [pies, setPies] = useState<PieLike[] | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/pies");
+        if (!res.ok) return;
+        const j = (await res.json()) as { pies: PieLike[] };
+        if (!cancelled) setPies(j.pies ?? []);
+      } catch {
+        /* fall back to the reconstructed split */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const holdingValue = useMemo(() => {
     const map = new Map<string, number>();
     for (const p of positions) map.set(p.instrument.ticker, p.walletImpact.currentValue);
@@ -65,16 +83,30 @@ export default function AllocationPlanner({ positions, currency }: { positions: 
   const assignedTickers = useMemo(() => new Set(categories.flatMap((c) => c.members.map((m) => m.t212Ticker).filter(Boolean))), [categories]);
   const unassignedHoldings = positions.filter((p) => !assignedTickers.has(p.instrument.ticker));
 
-  const catValue = useCallback(
-    (c: Category) => c.members.reduce((a, m) => a + (m.t212Ticker ? (holdingValue.get(m.t212Ticker) ?? 0) : 0), 0),
-    [holdingValue],
-  );
+  // Real current value per category: the matching Trading212 pie when we have it
+  // (exact), else each member's holding scaled by this category's share of it so a
+  // ticker in several categories is never double-counted.
+  const catValues = useMemo(() => {
+    const pieMap = pies ? piesByCategoryName(pies) : new Map<string, PieLike>();
+    const splits = tickerSplits(categories);
+    return categories.map((c, i) => {
+      const pie = pieMap.get(normalizePieName(c.name));
+      if (pie) return pie.value; // exact, from the real Trading212 pie
+      return c.members.reduce((a, m) => {
+        if (!m.t212Ticker) return a;
+        const frac = splits.get(m.t212Ticker)?.find((s) => s.categoryIndex === i)?.fraction ?? 1;
+        return a + (holdingValue.get(m.t212Ticker) ?? 0) * frac;
+      }, 0);
+    });
+  }, [categories, holdingValue, pies]);
 
-  const totalAssigned = useMemo(() => categories.reduce((a, c) => a + catValue(c), 0), [categories, catValue]);
+  const catValueAt = useCallback((i: number) => catValues[i] ?? 0, [catValues]);
+
+  const totalAssigned = useMemo(() => catValues.reduce((a, b) => a + b, 0), [catValues]);
   const pctSum = categories.reduce((a, c) => a + c.targetPct, 0);
 
   const plan = useMemo(() => {
-    const currents = categories.map(catValue);
+    const currents = catValues;
     const amounts = rebalanceDeposit(deposit, currents, categories.map((c) => c.targetPct));
     const totalAfter = currents.reduce((a, b) => a + b, 0) + amounts.reduce((a, b) => a + b, 0);
     return categories.map((c, i) => {
@@ -91,7 +123,7 @@ export default function AllocationPlanner({ positions, currency }: { positions: 
         })),
       };
     });
-  }, [categories, deposit, catValue, totalAssigned]);
+  }, [categories, deposit, catValues, totalAssigned]);
 
   const addCategory = () => {
     const name = newName.trim();
@@ -177,8 +209,8 @@ export default function AllocationPlanner({ positions, currency }: { positions: 
         )}
 
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
-          {categories.map((c) => {
-            const value = catValue(c);
+          {categories.map((c, i) => {
+            const value = catValueAt(i);
             const wSum = c.members.reduce((a, m) => a + m.weightPct, 0);
             return (
               <div key={c.id} className="rounded-xl border border-border bg-surface p-4">
