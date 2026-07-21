@@ -273,6 +273,10 @@ export default function Dashboard() {
           <CategoryOverview positions={positions} currency={cur} />
         </div>
 
+        <div className="mt-6 empty:hidden">
+          <CategoryBreakdown positions={positions} divStats={stats.divStats} dividends={dividends.items} currency={cur} />
+        </div>
+
         <div className="mt-6 grid gap-6 lg:grid-cols-2">
           <Section title="Future payments" sub="Projected from your trailing-year payment pattern">
             <FuturePayments data={stats.future} currency={cur} />
@@ -336,7 +340,7 @@ export default function Dashboard() {
           </Section>
         </div>
         <div className="mt-4">
-          <CategoryBreakdown positions={positions} divStats={stats.divStats} currency={cur} />
+          <CategoryBreakdown positions={positions} divStats={stats.divStats} dividends={dividends.items} currency={cur} />
         </div>
       </div>
 

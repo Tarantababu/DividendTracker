@@ -298,7 +298,9 @@ export default function DailyStatus({ dividends, currency }: { dividends: Divide
                 />
                 <Tooltip content={<EventTooltip currency={currency} />} />
                 <Area type="monotone" dataKey="value" stroke="var(--primary)" strokeWidth={1.8} fill="url(#pvFill)" />
-                <Line type="monotone" dataKey="cost" stroke="var(--muted-2)" strokeWidth={1.3} strokeDasharray="5 4" dot={false} isAnimationActive={false} />
+                {/* stepAfter, not monotone — the invested line is cumulative capital;
+                    steps at each buy read as real deposits instead of a smoothed diagonal */}
+                <Line type="stepAfter" dataKey="cost" stroke="var(--muted-2)" strokeWidth={1.5} strokeDasharray="5 4" dot={false} isAnimationActive={false} />
                 {EVENT_KINDS.map((kind) => (
                   <Line
                     key={kind}
