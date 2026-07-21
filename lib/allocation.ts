@@ -129,14 +129,53 @@ export interface CategoryLookup {
   index: number;
 }
 
-/** T212 ticker → category (name + stable color by category order). */
-export function tickerCategoryIndex(categories: AllocationCategory[]): Map<string, CategoryLookup> {
-  const map = new Map<string, CategoryLookup>();
-  categories.forEach((c, index) => {
+export interface TickerSplit {
+  categoryIndex: number;
+  name: string;
+  color: string;
+  fraction: number; // share of this ticker's holding attributed to this category (splits sum to 1)
+}
+
+/**
+ * How each T212 ticker's holding splits across the categories it belongs to.
+ * A ticker can live in several categories; its position is divided in proportion
+ * to each category's intended euro share of it (categoryTarget% × memberWeight%),
+ * so a holding is never double-counted and category values reconcile to the total.
+ */
+export function tickerSplits(categories: AllocationCategory[]): Map<string, TickerSplit[]> {
+  const raw = new Map<string, { idx: number; intent: number }[]>();
+  categories.forEach((c, idx) => {
     for (const m of c.members) {
-      if (m.t212Ticker) map.set(m.t212Ticker, { name: c.name, color: CATEGORY_COLORS[index % CATEGORY_COLORS.length], index });
+      if (!m.t212Ticker) continue;
+      const intent = Math.max(0, c.targetPct) * Math.max(0, m.weightPct); // relative euro intent
+      const arr = raw.get(m.t212Ticker) ?? [];
+      arr.push({ idx, intent });
+      raw.set(m.t212Ticker, arr);
     }
   });
+  const out = new Map<string, TickerSplit[]>();
+  for (const [ticker, arr] of raw) {
+    const sum = arr.reduce((a, x) => a + x.intent, 0);
+    out.set(
+      ticker,
+      arr.map((x) => ({
+        categoryIndex: x.idx,
+        name: categories[x.idx].name,
+        color: CATEGORY_COLORS[x.idx % CATEGORY_COLORS.length],
+        fraction: sum > 0 ? x.intent / sum : 1 / arr.length, // equal split if intents are all zero
+      })),
+    );
+  }
+  return out;
+}
+
+/** T212 ticker → its dominant category (for a single chip colour on tables/charts). */
+export function tickerCategoryIndex(categories: AllocationCategory[]): Map<string, CategoryLookup> {
+  const map = new Map<string, CategoryLookup>();
+  for (const [ticker, splits] of tickerSplits(categories)) {
+    const best = splits.reduce((a, b) => (b.fraction > a.fraction ? b : a));
+    map.set(ticker, { name: best.name, color: best.color, index: best.categoryIndex });
+  }
   return map;
 }
 
@@ -149,13 +188,14 @@ export interface CategorySlice {
 
 /** Portfolio value grouped by category, plus an Unassigned bucket. */
 export function groupByCategory(categories: AllocationCategory[], positions: Position[]): CategorySlice[] {
-  const lookup = tickerCategoryIndex(categories);
+  const splits = tickerSplits(categories);
   const values = categories.map(() => 0);
   let unassigned = 0;
   for (const p of positions) {
-    const hit = lookup.get(p.instrument.ticker);
-    if (hit) values[hit.index] += p.walletImpact.currentValue;
-    else unassigned += p.walletImpact.currentValue;
+    const sp = splits.get(p.instrument.ticker);
+    if (sp && sp.length) {
+      for (const s of sp) values[s.categoryIndex] += p.walletImpact.currentValue * s.fraction;
+    } else unassigned += p.walletImpact.currentValue;
   }
   const slices: CategorySlice[] = categories.map((c, i) => ({
     name: c.name,

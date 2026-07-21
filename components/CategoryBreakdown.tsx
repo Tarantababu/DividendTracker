@@ -5,7 +5,7 @@ import { Area, AreaChart, Line, ResponsiveContainer, Tooltip } from "recharts";
 import { formatMoney } from "@/lib/analytics";
 import type { TickerDividendStats } from "@/lib/analytics";
 import type { DividendItem, Position } from "@/lib/types";
-import { CATEGORY_COLORS, useAllocation } from "@/lib/allocation";
+import { CATEGORY_COLORS, tickerSplits, useAllocation } from "@/lib/allocation";
 import type { HoldingSeries } from "@/app/api/portfolio-history/route";
 
 interface HistoryPayload {
@@ -102,42 +102,47 @@ export default function CategoryBreakdown({ positions, divStats, dividends, curr
     }
     for (const arr of divsByTicker.values()) arr.sort((a, b) => a.date.localeCompare(b.date));
 
+    // Split each ticker's holding across the categories it belongs to (no double-counting)
+    const splits = tickerSplits(categories);
+    const fractionOf = (ticker: string, catIdx: number) => splits.get(ticker)?.find((s) => s.categoryIndex === catIdx)?.fraction ?? 1;
+
     return categories.map((c, i) => {
       const color = CATEGORY_COLORS[i % CATEGORY_COLORS.length];
       let value = 0;
       let invested = 0;
       let ttm = 0;
       let allDiv = 0;
-      // Aggregate member holdings (a ticker may be listed in several categories —
-      // its value counts toward each category it belongs to).
-      const memberTickers = c.members.map((m) => m.t212Ticker).filter((t): t is string => !!t);
-      for (const t of memberTickers) {
+      // A ticker may sit in several categories — take only this category's share of it.
+      const members = c.members.map((m) => m.t212Ticker).filter((t): t is string => !!t).map((t) => ({ t, frac: fractionOf(t, i) }));
+      for (const { t, frac } of members) {
         const p = posByTicker.get(t);
         if (p) {
-          value += p.walletImpact.currentValue;
-          invested += p.walletImpact.totalCost;
+          value += p.walletImpact.currentValue * frac;
+          invested += p.walletImpact.totalCost * frac;
         }
         const d = divByTicker.get(t);
         if (d) {
-          ttm += d.ttm;
-          allDiv += d.allTime;
+          ttm += d.ttm * frac;
+          allDiv += d.allTime * frac;
         }
       }
 
-      // Cumulative dividends received by each history date (all members, all-time to date)
-      const memberDivs = memberTickers.flatMap((t) => divsByTicker.get(t) ?? []).sort((a, b) => a.date.localeCompare(b.date));
+      // Cumulative dividends by date, each ticker scaled by this category's share
+      const memberDivs = members
+        .flatMap(({ t, frac }) => (divsByTicker.get(t) ?? []).map((x) => ({ date: x.date, amount: x.amount * frac })))
+        .sort((a, b) => a.date.localeCompare(b.date));
       let divPtr = 0;
       let divRunning = 0;
 
-      // History: sum member value + cost series by date index; add total-return line
+      // History: sum member value + cost series (this category's share) by date; add total-return line
       const series: CatPoint[] = dates.map((date, idx) => {
         let v = 0;
         let cost = 0;
-        for (const t of memberTickers) {
+        for (const { t, frac } of members) {
           const s = seriesByTicker.get(t);
           if (s) {
-            v += s.values[idx] ?? 0;
-            cost += s.costs[idx] ?? 0;
+            v += (s.values[idx] ?? 0) * frac;
+            cost += (s.costs[idx] ?? 0) * frac;
           }
         }
         while (divPtr < memberDivs.length && memberDivs[divPtr].date <= date) divRunning += memberDivs[divPtr++].amount;
