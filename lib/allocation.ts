@@ -32,6 +32,63 @@ export interface AllocationState {
 export const CATEGORY_COLORS = ["#6d4aff", "#38a6f8", "#34d399", "#f5a623", "#f472b6", "#22d3ee", "#a78bfa", "#60a5fa", "#8b5cf6", "#c4b5fd"];
 export const UNASSIGNED_COLOR = "#8a8fa3";
 
+// Baked-in starter allocation so the tool is useful out of the box (no manual
+// setup). Category targetPct sums to 100; each category's member weightPct sums
+// to 100. t212Ticker matches the live Trading212 tickers so dashboard category
+// colouring and rebalancing work immediately. The user can still edit/clear it on
+// the Allocation tab — a saved state always wins over this default.
+export const DEFAULT_ALLOCATION: AllocationState = {
+  deposit: 500,
+  categories: [
+    {
+      id: "div-growth",
+      name: "Div. Growth",
+      targetPct: 60,
+      members: [
+        { id: "ZPRGd_EQ", t212Ticker: "ZPRGd_EQ", name: "SPDR S&P Global Dividend Aristocrats", weightPct: 20 },
+        { id: "FUSDd_EQ", t212Ticker: "FUSDd_EQ", name: "Fidelity US Quality Income (Dist)", weightPct: 20 },
+        { id: "JGGIl_EQ", t212Ticker: "JGGIl_EQ", name: "JPMorgan Global Growth & Income", weightPct: 20 },
+        { id: "QDVDd_EQ", t212Ticker: "QDVDd_EQ", name: "iShares MSCI USA Quality Dividend", weightPct: 20 },
+        { id: "VUSAa_EQ", t212Ticker: "VUSAa_EQ", name: "Vanguard S&P 500 (Dist)", weightPct: 10 },
+        { id: "QDVX1d_EQ", t212Ticker: "QDVX1d_EQ", name: "iShares MSCI Europe Quality Dividend", weightPct: 10 },
+      ],
+    },
+    {
+      id: "mid-yield",
+      name: "Mid Yield",
+      targetPct: 30,
+      members: [
+        { id: "JEGPl_EQ", t212Ticker: "JEGPl_EQ", name: "JPMorgan Global Equity Premium Income", weightPct: 50 },
+        { id: "JEPQl_EQ", t212Ticker: "JEPQl_EQ", name: "JPMorgan Nasdaq Equity Premium Income", weightPct: 45 },
+        { id: "QYLPl_EQ", t212Ticker: "QYLPl_EQ", name: "Global X Nasdaq 100 Covered Call", weightPct: 2 },
+        { id: "XYLPl_EQ", t212Ticker: "XYLPl_EQ", name: "Global X S&P 500 Covered Call", weightPct: 1 },
+        { id: "XYLUl_EQ", t212Ticker: "XYLUl_EQ", name: "Global X S&P 500 Covered Call (Dist)", weightPct: 1 },
+        { id: "QYLDl_EQ", t212Ticker: "QYLDl_EQ", name: "Global X Nasdaq 100 Covered Call (Dist)", weightPct: 1 },
+      ],
+    },
+    {
+      id: "bitcoin",
+      name: "Bitcoin",
+      targetPct: 5,
+      members: [{ id: "21BCd_EQ", t212Ticker: "21BCd_EQ", name: "21Shares Bitcoin Core", weightPct: 100 }],
+    },
+    {
+      id: "mavi",
+      name: "Mavi",
+      targetPct: 5,
+      members: [
+        { id: "FUSDd_EQ", t212Ticker: "FUSDd_EQ", name: "Fidelity US Quality Income (Dist)", weightPct: 70 },
+        { id: "JEQPd_EQ", t212Ticker: "JEQPd_EQ", name: "JPMorgan Nasdaq Equity Premium Income (Dist)", weightPct: 30 },
+      ],
+    },
+  ],
+};
+
+/** Fresh deep copy of the default so callers never mutate the shared constant. */
+export function defaultAllocation(): AllocationState {
+  return JSON.parse(JSON.stringify(DEFAULT_ALLOCATION)) as AllocationState;
+}
+
 export function loadAllocation(): AllocationState {
   try {
     const raw = localStorage.getItem(ALLOCATION_KEY);
@@ -42,7 +99,7 @@ export function loadAllocation(): AllocationState {
   } catch {
     /* corrupted storage — start fresh */
   }
-  return { categories: [], deposit: 500 };
+  return defaultAllocation();
 }
 
 export function saveAllocation(state: AllocationState) {
