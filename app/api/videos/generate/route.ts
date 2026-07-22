@@ -1,9 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { spawn } from "child_process";
+import { spawn, execFileSync } from "child_process";
 import fs from "fs";
 import path from "path";
 
 export const dynamic = "force-dynamic";
+
+/** Free space on / in GB (MB precision). Returns null if df is unavailable. */
+function freeDiskGb(): number | null {
+  try {
+    const out = execFileSync("/bin/df", ["-m", "/"], { encoding: "utf8" });
+    const availMb = Number((out.trim().split("\n").pop() ?? "").split(/\s+/)[3]);
+    return Number.isFinite(availMb) ? availMb / 1024 : null;
+  } catch {
+    return null;
+  }
+}
 
 // Kicks off the full episode pipeline (snapshot → … → render, optionally → upload)
 // as a background child process and tracks its progress in memory. The POST returns
@@ -74,6 +85,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { error: "NOT_SET_UP", message: "video/node_modules is missing — run `cd video && npm install` once, then try again." },
       { status: 428 },
+    );
+  }
+
+  // Preflight disk — the render stage needs headroom. Fail before spending minutes
+  // (and the paid TTS) on a run that can't finish. Threshold from video/config.json.
+  let minFreeGb = 1.2;
+  try {
+    minFreeGb = JSON.parse(fs.readFileSync(path.join(videoRoot, "config.json"), "utf8"))?.render?.minFreeDiskGb ?? 1.2;
+  } catch {
+    /* keep default */
+  }
+  const freeGb = freeDiskGb();
+  if (freeGb != null && freeGb < minFreeGb) {
+    return NextResponse.json(
+      { error: "LOW_DISK", message: `Not enough disk to render: ${freeGb.toFixed(1)} GB free, need ${minFreeGb} GB. Free some space and try again.` },
+      { status: 507 },
     );
   }
 

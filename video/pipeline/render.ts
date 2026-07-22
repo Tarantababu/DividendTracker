@@ -22,7 +22,7 @@ async function main() {
 
   const free = freeDiskGb();
   if (free < cfg.render.minFreeDiskGb) {
-    throw new Error(`Only ${free} GB free — need ${cfg.render.minFreeDiskGb} GB to render safely. Free some space first.`);
+    throw new Error(`Only ${free.toFixed(1)} GB free — need ${cfg.render.minFreeDiskGb} GB to render safely. Free some space first.`);
   }
 
   console.log("[render] bundling Remotion project…");

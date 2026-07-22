@@ -95,11 +95,12 @@ export function audioDuration(file: string): number {
   return parseFloat(m[1]);
 }
 
+/** Free space on / in GB (MB-precision, so sub-GB amounts aren't rounded to 0). */
 export function freeDiskGb(): number {
-  const out = execFileSync("/bin/df", ["-g", "/"], { encoding: "utf8" });
+  const out = execFileSync("/bin/df", ["-m", "/"], { encoding: "utf8" });
   const line = out.trim().split("\n").pop() ?? "";
-  const cols = line.split(/\s+/);
-  return Number(cols[3]) || 0;
+  const availMb = Number(line.split(/\s+/)[3]) || 0;
+  return availMb / 1024;
 }
 
 export async function fetchJson<T>(url: string): Promise<T> {
