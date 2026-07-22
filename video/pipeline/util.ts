@@ -19,7 +19,7 @@ export interface VideoConfig {
   storyline: string;
   screenshots: Record<string, string>;
   voice: {
-    provider: string; // "dia" | "openai" | "say"
+    provider: string; // "dia-remote" | "dia" | "openai" | "say"
     model: string;
     voice: string;
     instructions?: string;
@@ -27,6 +27,9 @@ export interface VideoConfig {
     // Local Dia model (nari-labs/dia). Requires a Python env with the `dia`
     // package installed — see video/README.md. Falls back automatically if absent.
     dia?: { pythonBin?: string; model?: string; device?: string; seed?: number };
+    // Hosted Dia (real nari-labs/dia on Replicate) — no local install. Needs
+    // REPLICATE_API_TOKEN in .env.local. Falls back automatically if the token is absent.
+    diaRemote?: { model?: string; cfgScale?: number; temperature?: number; topP?: number; seed?: number };
   };
   broll: { enabled: boolean; maxClipMb: number; orientation: string };
   music: { volume: number };

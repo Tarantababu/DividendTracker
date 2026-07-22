@@ -21,8 +21,13 @@ Output per week in `episodes/<YYYY-Www>/`: `data.json` (all numbers), `script.js
 
 - The app's dev server running on `localhost:3000` (the pipeline reads its APIs).
 - `ANTHROPIC_API_KEY` in the app's `.env.local` (script writing) — already set up.
-- `OPENAI_API_KEY` in `.env.local` for the real voice (`gpt-4o-mini-tts`, ~0.10 €/episode).
-  Without it the pipeline falls back to the macOS `say` voice so you can test.
+- **Voice** — the default is **hosted Dia** (real `nari-labs/dia` on Replicate,
+  `zsxkib/dia`, ~$0.025/segment). Add `REPLICATE_API_TOKEN=...` to `.env.local`
+  (get one at replicate.com/account/api-tokens). The voice stage falls back in
+  order **dia-remote → openai → say**, so:
+  - no `REPLICATE_API_TOKEN` → uses `OPENAI_API_KEY` (`gpt-4o-mini-tts`) if present,
+  - neither key → the free macOS `say` voice, so you can still test end-to-end.
+  Set `voice.provider` in `config.json` to `openai`, `say`, or local `dia` to override.
 
 ## YouTube draft upload (one-time setup)
 

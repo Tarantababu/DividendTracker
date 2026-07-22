@@ -75,6 +75,51 @@ function diaTts(jobs: { id: string; text: string; outFile: string }[], cfg: Vide
   fs.rmSync(jobFile, { force: true });
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Hosted Dia (real nari-labs/dia on Replicate) — synthesizes one segment to a wav.
+ * Uses the model's latest version (no pinned id) and `Prefer: wait` to block until
+ * done, polling as a backstop for longer jobs. Throws so the caller can fall back.
+ */
+async function diaRemoteTts(text: string, outFile: string, cfg: VideoConfig): Promise<void> {
+  const token = process.env.REPLICATE_API_TOKEN;
+  if (!token) throw new Error("REPLICATE_API_TOKEN not set");
+  const model = cfg.voice.diaRemote?.model || "zsxkib/dia";
+  const clean = text.trim();
+  const input: Record<string, unknown> = {
+    // Dia is a dialogue model; single-speaker narration gets an [S1] tag.
+    text: clean.startsWith("[S") ? clean : `[S1] ${clean}`,
+    cfg_scale: cfg.voice.diaRemote?.cfgScale ?? 3,
+    temperature: cfg.voice.diaRemote?.temperature ?? 1.3,
+    top_p: cfg.voice.diaRemote?.topP ?? 0.95,
+  };
+  if (cfg.voice.diaRemote?.seed != null) input.seed = cfg.voice.diaRemote.seed;
+
+  const res = await fetch(`https://api.replicate.com/v1/models/${model}/predictions`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Prefer: "wait" },
+    body: JSON.stringify({ input }),
+  });
+  if (!res.ok) throw new Error(`Replicate HTTP ${res.status}: ${(await res.text().catch(() => "")).slice(0, 300)}`);
+
+  let pred = (await res.json()) as { status: string; output?: unknown; error?: unknown; urls?: { get?: string } };
+  const deadline = Date.now() + 5 * 60 * 1000;
+  while (pred.status !== "succeeded" && pred.status !== "failed" && pred.status !== "canceled") {
+    if (Date.now() > deadline) throw new Error("Replicate Dia timed out");
+    if (!pred.urls?.get) break;
+    await sleep(2000);
+    pred = (await (await fetch(pred.urls.get, { headers: { Authorization: `Bearer ${token}` } })).json()) as typeof pred;
+  }
+  if (pred.status !== "succeeded") throw new Error(`Dia prediction ${pred.status}: ${JSON.stringify(pred.error).slice(0, 200)}`);
+
+  const url = Array.isArray(pred.output) ? (pred.output[0] as string) : (pred.output as string);
+  if (!url) throw new Error("Dia returned no audio URL");
+  const audio = await fetch(url);
+  if (!audio.ok) throw new Error(`Fetching Dia audio failed: HTTP ${audio.status}`);
+  fs.writeFileSync(outFile, Buffer.from(await audio.arrayBuffer()));
+}
+
 async function main() {
   loadEnv();
   const cfg = loadConfig();
@@ -89,9 +134,14 @@ async function main() {
   // Resolve the provider, degrading when its prerequisites are missing so the
   // pipeline always produces audio.
   let provider = cfg.voice.provider;
-  if (provider === "dia" && !diaAvailable(cfg)) {
+  if (provider === "dia-remote" && !process.env.REPLICATE_API_TOKEN) {
     const next = process.env.OPENAI_API_KEY ? "openai" : cfg.voice.fallbackProvider;
-    console.warn(`[voice] Dia not importable (need a Python env with the 'dia' package — see video/README.md) — falling back to '${next}'`);
+    console.warn(`[voice] Hosted Dia needs REPLICATE_API_TOKEN in .env.local — falling back to '${next}'`);
+    provider = next;
+  }
+  if (provider === "dia" && !diaAvailable(cfg)) {
+    const next = process.env.REPLICATE_API_TOKEN ? "dia-remote" : process.env.OPENAI_API_KEY ? "openai" : cfg.voice.fallbackProvider;
+    console.warn(`[voice] Local Dia not importable (need a Python env with the 'dia' package — see video/README.md) — falling back to '${next}'`);
     provider = next;
   }
   if (provider === "openai" && !process.env.OPENAI_API_KEY) {
@@ -102,7 +152,7 @@ async function main() {
   const segments: AudioSegment[] = [];
 
   if (provider === "dia") {
-    // One process for all segments — Dia's model load is the expensive part.
+    // One process for all segments — the local Dia model load is the expensive part.
     const jobs = script.segments.map((seg) => ({ id: seg.id, text: seg.voiceover, outFile: path.join(audioDir, `${seg.id}.mp3`) }));
     diaTts(jobs, cfg);
     for (const j of jobs) {
@@ -112,9 +162,11 @@ async function main() {
     }
   } else {
     for (const seg of script.segments) {
-      const ext = provider === "openai" ? "mp3" : "m4a";
+      const ext = provider === "dia-remote" ? "wav" : provider === "openai" ? "mp3" : "m4a";
       const file = path.join(audioDir, `${seg.id}.${ext}`);
-      if (provider === "openai") {
+      if (provider === "dia-remote") {
+        await diaRemoteTts(seg.voiceover, file, cfg);
+      } else if (provider === "openai") {
         await openaiTts(seg.voiceover, file, cfg.voice.model, cfg.voice.voice, cfg.voice.instructions);
       } else if (provider === "say") {
         sayTts(seg.voiceover, file);
@@ -127,7 +179,8 @@ async function main() {
     }
   }
 
-  const voiceLabel = provider === "dia" ? (cfg.voice.dia?.model ?? "dia") : provider === "openai" ? cfg.voice.voice : "system";
+  const voiceLabel =
+    provider === "dia" ? (cfg.voice.dia?.model ?? "dia") : provider === "dia-remote" ? (cfg.voice.diaRemote?.model ?? "dia (replicate)") : provider === "openai" ? cfg.voice.voice : "system";
   const manifest: AudioManifest = {
     provider,
     voice: voiceLabel,
