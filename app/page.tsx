@@ -57,6 +57,25 @@ function Section({ title, sub, children }: { title: string; sub?: string; childr
   );
 }
 
+function LoadingScreen({ progress }: { progress: number }) {
+  const pct = Math.min(100, Math.round(progress * 100));
+  const label = progress < 0.5 ? "Connecting to Trading212…" : progress < 0.85 ? "Fetching positions & dividends…" : "Almost ready…";
+  return (
+    <main className="flex min-h-screen items-center justify-center px-6">
+      <div className="w-full max-w-sm">
+        <div className="flex items-baseline justify-between">
+          <span className="text-sm font-medium text-foreground">{label}</span>
+          <span className="num text-xs text-muted-2">{pct}%</span>
+        </div>
+        <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-surface">
+          <div className="h-full rounded-full bg-[var(--primary)] transition-[width] duration-500 ease-out" style={{ width: `${pct}%` }} />
+        </div>
+        <p className="mt-2 text-xs text-muted-2">First load after idle can take ~30s while the live data syncs.</p>
+      </div>
+    </main>
+  );
+}
+
 function SetupScreen() {
   return (
     <main className="flex min-h-screen items-center justify-center p-6">
@@ -85,6 +104,7 @@ export default function Dashboard() {
   const [error, setError] = useState<ApiError | null>(null);
   const [needsSetup, setNeedsSetup] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [progress, setProgress] = useState(0.06);
   const [syncing, setSyncing] = useState(false);
   const [tab, setTab] = useState<TabId>("overview");
 
@@ -101,10 +121,14 @@ export default function Dashboard() {
 
   const load = useCallback(async (refresh: boolean) => {
     try {
-      const [ovRes, divRes] = await Promise.all([
-        fetch("/api/overview"),
-        fetch(`/api/dividends${refresh ? "?refresh=1" : ""}`),
-      ]);
+      setProgress(0.12);
+      // Fire both requests together but bump the bar as each one lands, so the
+      // progress reflects real milestones (overview is the faster of the two).
+      const ovP = fetch("/api/overview");
+      const divP = fetch(`/api/dividends${refresh ? "?refresh=1" : ""}`);
+      ovP.then(() => setProgress((p) => Math.max(p, 0.6))).catch(() => {});
+      divP.then(() => setProgress((p) => Math.max(p, 0.85))).catch(() => {});
+      const [ovRes, divRes] = await Promise.all([ovP, divP]);
       if (ovRes.status === 428 || divRes.status === 428) {
         setNeedsSetup(true);
         return;
@@ -114,6 +138,7 @@ export default function Dashboard() {
       setOverview(await ovRes.json());
       setDividends(await divRes.json());
       setError(null);
+      setProgress(1);
     } catch (e) {
       const err = e as Partial<ApiError>;
       setError({ error: err.error ?? "NETWORK", message: err.message ?? "Could not reach the local API." });
@@ -122,6 +147,14 @@ export default function Dashboard() {
       setSyncing(false);
     }
   }, []);
+
+  // Ease the bar toward 90% while the (cold, ~30s) serverless fetch is in flight,
+  // so it always feels alive even between the real milestones above.
+  useEffect(() => {
+    if (!loading) return;
+    const t = setInterval(() => setProgress((p) => (p < 0.9 ? p + (0.9 - p) * 0.06 : p)), 350);
+    return () => clearInterval(t);
+  }, [loading]);
 
   useEffect(() => {
     // Initial data fetch; all setState calls in `load` happen after the awaited response
@@ -159,13 +192,7 @@ export default function Dashboard() {
 
   if (needsSetup) return <SetupScreen />;
 
-  if (loading) {
-    return (
-      <main className="flex min-h-screen items-center justify-center">
-        <div className="animate-pulse text-sm text-muted">Loading portfolio from Trading212…</div>
-      </main>
-    );
-  }
+  if (loading) return <LoadingScreen progress={progress} />;
 
   if (error || !overview || !dividends || !stats) {
     return (

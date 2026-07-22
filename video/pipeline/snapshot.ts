@@ -49,6 +49,7 @@ export interface EpisodeData {
     growth: number;
     savingsRatePct: number | null;
     monthlyExpenses: number | null;
+    assumptions?: { monthlyExpenses: number; annualReturnPct: number; monthlyContribution: number; withdrawalRatePct: number };
     types: Array<{ key: string; label: string; target: number; progressPct: number; etaYears: number | null }>;
     dividendCoveragePct: number | null;
   };
@@ -132,15 +133,16 @@ async function main() {
   const deposits = evWeek.filter((e: any) => e.kind === "deposit");
   const withdrawals = evWeek.filter((e: any) => e.kind === "withdrawal");
 
-  // FIRE per-type projections are computed client-side in the app; recompute here
-  // with the same lib + defaults the /fire page uses.
-  const effReturn = fire.xirrPct != null ? Math.min(12, Math.max(0, fire.xirrPct)) : 6;
-  const monthlyExpenses = fire.budget ? Math.round(fire.budget.monthlyExpenses) : 2500;
-  const contribution = fire.budget && fire.budget.monthlyNet > 0 ? Math.round(fire.budget.monthlyNet) : Math.max(0, Math.round(fire.monthlyContribution12m));
+  // FIRE assumptions are FIXED for the episode narrative (independent of the app's
+  // live budget/return) so the weekly videos tell one consistent story.
+  const effReturn = 16; // expected return %/yr
+  const monthlyExpenses = 4000; // €/mo
+  const contribution = 1400; // monthly contribution €
+  const withdrawalRatePct = 12; // safe-withdrawal %/yr
   const yieldPct = fire.totalValue > 0 ? (fire.dividends12m / fire.totalValue) * 100 : 0;
   const targetInputs = {
     monthlyExpenses,
-    withdrawalRatePct: 4,
+    withdrawalRatePct,
     annualReturnPct: effReturn,
     portfolioYieldPct: yieldPct,
     leanPct: 60,
@@ -150,7 +152,7 @@ async function main() {
   };
   const types = FIRE_TYPES.map((t: any) => {
     const target = fireTarget(t.key, targetInputs);
-    const p = projectFire({ currentValue: fire.totalValue, monthlyContribution: contribution, annualReturnPct: effReturn, target, incomeRatePct: t.key === "dividend" ? yieldPct : 4 });
+    const p = projectFire({ currentValue: fire.totalValue, monthlyContribution: contribution, annualReturnPct: effReturn, target, incomeRatePct: t.key === "dividend" ? yieldPct : withdrawalRatePct });
     return { key: t.key, label: t.label, target: Math.round(target), progressPct: p.progressPct, etaYears: p.monthsToTarget != null ? Math.round((p.monthsToTarget / 12) * 10) / 10 : null };
   });
 
@@ -191,7 +193,8 @@ async function main() {
       netContributions: fire.netContributions,
       growth: fire.growth,
       savingsRatePct: fire.budget ? fire.budget.savingsRate * 100 : null,
-      monthlyExpenses: fire.budget ? fire.budget.monthlyExpenses : null,
+      monthlyExpenses,
+      assumptions: { monthlyExpenses, annualReturnPct: effReturn, monthlyContribution: contribution, withdrawalRatePct },
       types,
       dividendCoveragePct: monthlyExpenses > 0 ? (fire.dividendsMonthly12m / monthlyExpenses) * 100 : null,
     },

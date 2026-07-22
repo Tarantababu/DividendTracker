@@ -16,6 +16,17 @@ interface Agg {
   funds: Set<string>;
 }
 
+// Funds with a known, published single-asset composition that public data sources
+// won't decompose (e.g. crypto ETPs return no equity holdings). We map them to
+// their real underlying so the look-through shows the true exposure instead of an
+// "opaque fund". 21BC = 21Shares Bitcoin Core ETP → 100% Bitcoin.
+const KNOWN_FUNDS: { match: (name: string, ticker: string) => boolean; holdings: { symbol: string; name: string; weight: number }[] }[] = [
+  {
+    match: (name, ticker) => /(^|[^A-Z])21BC([^A-Z]|$)/i.test(ticker) || /21\s*shares.*bitcoin|bitcoin core/i.test(name),
+    holdings: [{ symbol: "BTC", name: "Bitcoin", weight: 1 }],
+  },
+];
+
 export async function GET() {
   const store = globalThis as Record<string, unknown>;
   const cached = store.__lookthrough as { at: number; payload: LookThroughResult } | undefined;
@@ -68,6 +79,15 @@ export async function GET() {
     for (const { p, guess, symbol, fund } of enriched) {
       const value = p.walletImpact.currentValue;
       if (value <= 0) continue;
+
+      // Known single-asset funds (e.g. 21BC → Bitcoin) that public data won't
+      // decompose — map to their real underlying so they show as exposure, not opaque.
+      const known = KNOWN_FUNDS.find((k) => k.match(p.instrument.name, guess));
+      if (known) {
+        resolvedEtfs++;
+        for (const h of known.holdings) add(h.symbol, h.name, value * h.weight, { fund: guess });
+        continue;
+      }
 
       // A holding is a fund if the data says so OR its name looks like one (Yahoo
       // often misclassifies active/UCITS funds like JGGI as plain EQUITY).
