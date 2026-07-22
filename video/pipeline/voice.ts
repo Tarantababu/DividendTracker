@@ -77,15 +77,33 @@ function diaTts(jobs: { id: string; text: string; outFile: string }[], cfg: Vide
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// Resolved once per run so we don't refetch the version for every segment.
+let diaVersionCache: string | null = null;
+
+/** Latest version hash of the Replicate Dia model (or a pinned one from config). */
+async function resolveDiaVersion(model: string, token: string, pinned?: string): Promise<string> {
+  if (pinned) return pinned;
+  if (diaVersionCache) return diaVersionCache;
+  const res = await fetch(`https://api.replicate.com/v1/models/${model}`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) throw new Error(`Replicate model lookup HTTP ${res.status} for ${model}`);
+  const info = (await res.json()) as { latest_version?: { id?: string } };
+  const id = info.latest_version?.id;
+  if (!id) throw new Error(`No latest version for Replicate model ${model}`);
+  diaVersionCache = id;
+  return id;
+}
+
 /**
  * Hosted Dia (real nari-labs/dia on Replicate) — synthesizes one segment to a wav.
- * Uses the model's latest version (no pinned id) and `Prefer: wait` to block until
- * done, polling as a backstop for longer jobs. Throws so the caller can fall back.
+ * Uses the version-based /v1/predictions endpoint (community models don't support
+ * the model-name shortcut) with `Prefer: wait`, polling as a backstop for longer
+ * jobs. Throws so the caller can fall back.
  */
 async function diaRemoteTts(text: string, outFile: string, cfg: VideoConfig): Promise<void> {
   const token = process.env.REPLICATE_API_TOKEN;
   if (!token) throw new Error("REPLICATE_API_TOKEN not set");
   const model = cfg.voice.diaRemote?.model || "zsxkib/dia";
+  const version = await resolveDiaVersion(model, token, cfg.voice.diaRemote?.version);
   const clean = text.trim();
   const input: Record<string, unknown> = {
     // Dia is a dialogue model; single-speaker narration gets an [S1] tag.
@@ -96,11 +114,13 @@ async function diaRemoteTts(text: string, outFile: string, cfg: VideoConfig): Pr
   };
   if (cfg.voice.diaRemote?.seed != null) input.seed = cfg.voice.diaRemote.seed;
 
-  const res = await fetch(`https://api.replicate.com/v1/models/${model}/predictions`, {
+  const res = await fetch(`https://api.replicate.com/v1/predictions`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Prefer: "wait" },
-    body: JSON.stringify({ input }),
+    body: JSON.stringify({ version, input }),
   });
+  if (res.status === 402) throw new Error("Replicate 402 Payment Required — set up billing at replicate.com/account/billing (add a payment method / raise the spend limit), then retry.");
+  if (res.status === 401) throw new Error("Replicate 401 Unauthorized — REPLICATE_API_TOKEN is missing or invalid in .env.local.");
   if (!res.ok) throw new Error(`Replicate HTTP ${res.status}: ${(await res.text().catch(() => "")).slice(0, 300)}`);
 
   let pred = (await res.json()) as { status: string; output?: unknown; error?: unknown; urls?: { get?: string } };
