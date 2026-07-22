@@ -2,15 +2,15 @@
 
 import type { Position } from "@/lib/types";
 import { formatMoney } from "@/lib/analytics";
-import { categorySlices, useAllocation, usePies } from "@/lib/allocation";
+import { categorySlices, useAllocation, usePies, type PieLike } from "@/lib/allocation";
 
 /**
  * Compact target-vs-actual view of the user's category allocation.
  * Renders nothing until categories exist (created on the Allocation tab).
  */
-export default function CategoryOverview({ positions, currency }: { positions: Position[]; currency: string }) {
+export default function CategoryOverview({ positions, currency, pies: piesProp }: { positions: Position[]; currency: string; pies?: PieLike[] }) {
   const { categories } = useAllocation();
-  const pies = usePies();
+  const pies = usePies(piesProp);
 
   if (categories.length === 0) return null;
 

@@ -1,3 +1,5 @@
+import type { PieSummary } from "./t212";
+
 export interface AccountSummary {
   currency: string;
   cash: {
@@ -63,5 +65,10 @@ export interface DividendsPayload {
 export interface OverviewPayload {
   summary: AccountSummary;
   positions: Position[];
+  // Real Trading212 pies, fetched alongside positions so category values are
+  // exact from the first render (no post-mount fetch window that would briefly
+  // show the reconstructed split). Empty if the pies call failed; the client
+  // then falls back to fetching /api/pies on its own.
+  pies?: PieSummary[];
   fetchedAt: string;
 }

@@ -264,17 +264,17 @@ export default function Dashboard() {
           </div>
           <div className="lg:col-span-2">
             <Section title="Allocation" sub="By current market value">
-              <AllocationDonut positions={positions} currency={cur} />
+              <AllocationDonut positions={positions} currency={cur} pies={overview.pies} />
             </Section>
           </div>
         </div>
 
         <div className="mt-6 empty:hidden">
-          <CategoryOverview positions={positions} currency={cur} />
+          <CategoryOverview positions={positions} currency={cur} pies={overview.pies} />
         </div>
 
         <div className="mt-6 empty:hidden">
-          <CategoryBreakdown positions={positions} divStats={stats.divStats} dividends={dividends.items} currency={cur} />
+          <CategoryBreakdown positions={positions} divStats={stats.divStats} dividends={dividends.items} currency={cur} pies={overview.pies} />
         </div>
 
         <div className="mt-6 grid gap-6 lg:grid-cols-2">
@@ -336,11 +336,11 @@ export default function Dashboard() {
             title="Category allocation & deposit calculator"
             sub="Create categories, assign stocks/ETFs with weights, set target percentages — then split any deposit so your portfolio drifts toward the targets"
           >
-            <AllocationPlanner positions={positions} currency={cur} />
+            <AllocationPlanner positions={positions} currency={cur} pies={overview.pies} />
           </Section>
         </div>
         <div className="mt-4">
-          <CategoryBreakdown positions={positions} divStats={stats.divStats} dividends={dividends.items} currency={cur} />
+          <CategoryBreakdown positions={positions} divStats={stats.divStats} dividends={dividends.items} currency={cur} pies={overview.pies} />
         </div>
       </div>
 

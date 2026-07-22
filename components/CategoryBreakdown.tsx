@@ -65,10 +65,10 @@ function MiniHistory({ series, color, currency }: { series: CatPoint[]; color: s
   );
 }
 
-export default function CategoryBreakdown({ positions, divStats, dividends, currency }: { positions: Position[]; divStats: TickerDividendStats[]; dividends: DividendItem[]; currency: string }) {
+export default function CategoryBreakdown({ positions, divStats, dividends, currency, pies: piesProp }: { positions: Position[]; divStats: TickerDividendStats[]; dividends: DividendItem[]; currency: string; pies?: PieLike[] }) {
   const { categories } = useAllocation();
   const [data, setData] = useState<HistoryPayload | null>(null);
-  const pies = usePies(); // deduped page-wide; real pies give exact per-category actuals
+  const pies = usePies(piesProp); // exact per-category actuals; seeded from /api/overview when present
 
   useEffect(() => {
     let cancelled = false;

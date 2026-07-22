@@ -32,7 +32,7 @@ function rebalanceDeposit(deposit: number, currents: number[], pcts: number[]): 
   return needs.map((n, i) => n + surplus * norm[i]);
 }
 
-export default function AllocationPlanner({ positions, currency }: { positions: Position[]; currency: string }) {
+export default function AllocationPlanner({ positions, currency, pies: piesProp }: { positions: Position[]; currency: string; pies?: PieLike[] }) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [deposit, setDeposit] = useState<number>(500);
   const [newName, setNewName] = useState("");
@@ -56,7 +56,7 @@ export default function AllocationPlanner({ positions, currency }: { positions: 
     saveAllocation({ categories: cats, deposit: dep });
   }, []);
 
-  const pies = usePies();
+  const pies = usePies(piesProp);
 
   const holdingValue = useMemo(() => {
     const map = new Map<string, number>();

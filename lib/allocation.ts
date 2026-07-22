@@ -177,10 +177,22 @@ async function fetchPiesOnce(): Promise<PieLike[]> {
   return [];
 }
 
-/** Real Trading212 pies, fetched once per page and shared by all consumers. */
-export function usePies(): PieLike[] | null {
-  const [pies, setPies] = useState<PieLike[] | null>(piesCache);
+/**
+ * Real Trading212 pies, shared by all consumers on the page.
+ * Pass `seed` (e.g. from /api/overview) to use server-provided pies with zero
+ * client fetch — category values are then exact from the first render, with no
+ * window where the reconstructed fallback would briefly show. Without a seed it
+ * fetches /api/pies once, deduped across every consumer.
+ */
+export function usePies(seed?: PieLike[] | null): PieLike[] | null {
+  const seeded = seed && seed.length ? seed : null;
+  const [pies, setPies] = useState<PieLike[] | null>(seeded ?? piesCache);
   useEffect(() => {
+    if (seeded) {
+      piesCache = seeded; // let other consumers reuse it, no network call
+      setPies(seeded);
+      return;
+    }
     if (piesCache) {
       setPies(piesCache);
       return;
@@ -201,8 +213,8 @@ export function usePies(): PieLike[] | null {
     return () => {
       cancelled = true;
     };
-  }, []);
-  return pies;
+  }, [seeded]);
+  return seeded ?? pies;
 }
 
 /** Total current value of a ticker across all pies — the denominator for its real
