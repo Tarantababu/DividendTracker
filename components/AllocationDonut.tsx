@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import type { Position } from "@/lib/types";
 import { formatMoney, prettyTicker } from "@/lib/analytics";
-import { categorySlices, useAllocation, usePies, type PieLike } from "@/lib/allocation";
+import { categorySlices, useLiveCategories, usePies, type PieLike } from "@/lib/allocation";
 
 const COLORS = ["#6d4aff", "#8b5cf6", "#38a6f8", "#22d3ee", "#34d399", "#a78bfa", "#f5a623", "#f472b6", "#60a5fa", "#c4b5fd"];
 
@@ -17,9 +17,9 @@ interface Slice {
 }
 
 export default function AllocationDonut({ positions, currency, pies: piesProp }: { positions: Position[]; currency: string; pies?: PieLike[] }) {
-  const { categories } = useAllocation();
   const [mode, setMode] = useState<"category" | "holding">("category");
   const pies = usePies(piesProp);
+  const categories = useLiveCategories(pies);
   const useCategories = categories.length > 0 && mode === "category";
 
   const total = positions.reduce((s, p) => s + p.walletImpact.currentValue, 0);

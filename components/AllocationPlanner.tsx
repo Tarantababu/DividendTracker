@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatMoney, prettyTicker } from "@/lib/analytics";
 import type { Position } from "@/lib/types";
-import { loadAllocation, saveAllocation, tickerSplits, piesByCategoryName, normalizePieName, usePies, type AllocationCategory as Category, type AllocationMember as Member, type PieLike } from "@/lib/allocation";
+import { loadAllocation, saveAllocation, tickerSplits, piesByCategoryName, normalizePieName, categoriesFromPies, usePies, type AllocationCategory as Category, type AllocationMember as Member, type PieLike } from "@/lib/allocation";
 
 interface SearchResult {
   symbol: string;
@@ -58,13 +58,20 @@ export default function AllocationPlanner({ positions, currency, pies: piesProp 
 
   const pies = usePies(piesProp);
 
+  // Categories come live from the Trading212 pies (source of truth). The saved
+  // localStorage allocation is only an offline fallback / manual mode when there
+  // are no pies. In pie-driven mode the categories are read-only.
+  const pieCategories = useMemo(() => (pies && pies.length ? categoriesFromPies(pies) : null), [pies]);
+  const pieDriven = pieCategories !== null;
+  const effCategories = pieCategories ?? categories;
+
   const holdingValue = useMemo(() => {
     const map = new Map<string, number>();
     for (const p of positions) map.set(p.instrument.ticker, p.walletImpact.currentValue);
     return map;
   }, [positions]);
 
-  const assignedTickers = useMemo(() => new Set(categories.flatMap((c) => c.members.map((m) => m.t212Ticker).filter(Boolean))), [categories]);
+  const assignedTickers = useMemo(() => new Set(effCategories.flatMap((c) => c.members.map((m) => m.t212Ticker).filter(Boolean))), [effCategories]);
   const unassignedHoldings = positions.filter((p) => !assignedTickers.has(p.instrument.ticker));
 
   // Real current value per category: the matching Trading212 pie when we have it
@@ -72,8 +79,8 @@ export default function AllocationPlanner({ positions, currency, pies: piesProp 
   // ticker in several categories is never double-counted.
   const catValues = useMemo(() => {
     const pieMap = pies ? piesByCategoryName(pies) : new Map<string, PieLike>();
-    const splits = tickerSplits(categories);
-    return categories.map((c, i) => {
+    const splits = tickerSplits(effCategories);
+    return effCategories.map((c, i) => {
       const pie = pieMap.get(normalizePieName(c.name));
       if (pie) return pie.value; // exact, from the real Trading212 pie
       return c.members.reduce((a, m) => {
@@ -82,18 +89,18 @@ export default function AllocationPlanner({ positions, currency, pies: piesProp 
         return a + (holdingValue.get(m.t212Ticker) ?? 0) * frac;
       }, 0);
     });
-  }, [categories, holdingValue, pies]);
+  }, [effCategories, holdingValue, pies]);
 
   const catValueAt = useCallback((i: number) => catValues[i] ?? 0, [catValues]);
 
   const totalAssigned = useMemo(() => catValues.reduce((a, b) => a + b, 0), [catValues]);
-  const pctSum = categories.reduce((a, c) => a + c.targetPct, 0);
+  const pctSum = effCategories.reduce((a, c) => a + c.targetPct, 0);
 
   const plan = useMemo(() => {
     const currents = catValues;
-    const amounts = rebalanceDeposit(deposit, currents, categories.map((c) => c.targetPct));
+    const amounts = rebalanceDeposit(deposit, currents, effCategories.map((c) => c.targetPct));
     const totalAfter = currents.reduce((a, b) => a + b, 0) + amounts.reduce((a, b) => a + b, 0);
-    return categories.map((c, i) => {
+    return effCategories.map((c, i) => {
       const wSum = c.members.reduce((a, m) => a + m.weightPct, 0);
       return {
         category: c,
@@ -107,7 +114,7 @@ export default function AllocationPlanner({ positions, currency, pies: piesProp 
         })),
       };
     });
-  }, [categories, deposit, catValues, totalAssigned]);
+  }, [effCategories, deposit, catValues, totalAssigned]);
 
   const addCategory = () => {
     const name = newName.trim();
@@ -168,7 +175,44 @@ export default function AllocationPlanner({ positions, currency, pies: piesProp 
 
   return (
     <div className="space-y-6">
-      {/* Category manager */}
+      {/* Live categories from the Trading212 pies — the source of truth (read-only). */}
+      {pieDriven && (
+        <div className="rounded-xl border border-border bg-surface p-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <span className="text-sm font-semibold">Categories from your Trading212 pies</span>
+            <span className="num text-xs text-muted-2">source of truth · targets {pctSum.toFixed(0)}%</span>
+          </div>
+          <p className="mt-0.5 text-xs text-muted-2">Each pie is a category — names, targets and holdings come live from Trading212. Manage them in the Trading212 app.</p>
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            {effCategories.map((c, i) => {
+              const value = catValueAt(i);
+              return (
+                <div key={c.id} className="rounded-xl border border-border bg-card p-4">
+                  <div className="flex items-baseline gap-2">
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold">{c.name}</span>
+                    <span className="num shrink-0 text-xs text-muted">{c.targetPct.toFixed(0)}%</span>
+                  </div>
+                  <div className="num mt-1 text-xs text-muted-2">
+                    {formatMoney(value, currency)}
+                    {totalAssigned > 0 && ` · ${((value / totalAssigned) * 100).toFixed(1)}% of pies`}
+                  </div>
+                  <ul className="mt-3 space-y-1">
+                    {c.members.map((m) => (
+                      <li key={m.id} className="flex items-center gap-2 text-xs">
+                        <span className="min-w-0 flex-1 truncate">{m.name}</span>
+                        <span className="num shrink-0 text-muted-2">{m.weightPct.toFixed(0)}%</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Manual category manager — only when there are no live pies (offline fallback). */}
+      {!pieDriven && (
       <div>
         <div className="flex flex-wrap items-center gap-3">
           <input
@@ -304,9 +348,10 @@ export default function AllocationPlanner({ positions, currency, pies: piesProp 
           })}
         </div>
       </div>
+      )}
 
       {/* Deposit calculator */}
-      {categories.length > 0 && (
+      {effCategories.length > 0 && (
         <div className="rounded-xl border border-border bg-surface p-4">
           <div className="flex flex-wrap items-center gap-3">
             <span className="text-sm font-semibold">Deposit calculator</span>

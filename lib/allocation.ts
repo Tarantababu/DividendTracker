@@ -4,8 +4,9 @@
 // Allocation tab, persisted in localStorage). Same-tab consumers stay in sync
 // via the "allocation-changed" window event; other tabs via the storage event.
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Position } from "@/lib/types";
+import { prettyTicker } from "@/lib/analytics";
 
 export const ALLOCATION_KEY = "dividend-tracker-allocation-v1";
 const CHANGE_EVENT = "allocation-changed";
@@ -152,6 +153,58 @@ export const normalizePieName = (s: string) =>
 
 export function piesByCategoryName(pies: PieLike[]): Map<string, PieLike> {
   return new Map(pies.map((p) => [normalizePieName(p.name), p]));
+}
+
+/** A pie's display name without the "(%..)" target suffix, original case kept. */
+export const pieDisplayName = (s: string) =>
+  s
+    .replace(/\(\s*%?\s*\d+(?:\.\d+)?\s*%?\s*\)/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+/** Target % encoded in a pie name like "Div. Growth (%60)". null when absent. */
+export function pieTargetPct(name: string): number | null {
+  const m = name.match(/\(\s*%?\s*(\d+(?:\.\d+)?)\s*%?\s*\)/);
+  return m ? Number(m[1]) : null;
+}
+
+/**
+ * Build the category allocation straight from the live Trading212 pies — the
+ * source of truth. Each pie is a category: name from the pie (minus its "(%..)"
+ * suffix), target% parsed from that suffix (falling back to the pie's current
+ * weight when the name carries none), members from the pie's instruments weighted
+ * by their real current share. A ticker held in several pies simply appears in
+ * each — no reconstruction or splitting, since every pie value is already exact.
+ */
+export function categoriesFromPies(pies: PieLike[]): AllocationCategory[] {
+  const values = pies.map((p) => p.value || p.instruments.reduce((a, x) => a + x.value, 0));
+  const totalValue = values.reduce((a, v) => a + v, 0);
+  return pies.map((p, i) => {
+    const value = values[i];
+    const named = pieTargetPct(p.name);
+    return {
+      id: `pie-${normalizePieName(p.name) || i}`,
+      name: pieDisplayName(p.name) || `Pie ${i + 1}`,
+      targetPct: named ?? (totalValue > 0 ? (value / totalValue) * 100 : 0),
+      members: p.instruments.map((ins) => ({
+        id: ins.ticker,
+        t212Ticker: ins.ticker,
+        name: prettyTicker(ins.ticker),
+        weightPct: value > 0 ? (ins.value / value) * 100 : 0,
+      })),
+    };
+  });
+}
+
+/**
+ * Category allocation for the dashboard: derived live from the Trading212 pies
+ * when we have them, else the locally-saved allocation as an offline fallback.
+ * Pies are the source of truth — everything downstream (donut, target bars,
+ * per-category performance, the rebalance planner) reads from this.
+ */
+export function useLiveCategories(pies: PieLike[] | null | undefined): AllocationCategory[] {
+  const saved = useAllocation().categories;
+  return useMemo(() => (pies && pies.length ? categoriesFromPies(pies) : saved), [pies, saved]);
 }
 
 // Deduped client fetch of /api/pies. Four dashboard components consume pies; if

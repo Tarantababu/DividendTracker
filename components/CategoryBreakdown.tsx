@@ -5,7 +5,7 @@ import { Area, AreaChart, Line, ResponsiveContainer, Tooltip } from "recharts";
 import { formatMoney } from "@/lib/analytics";
 import type { TickerDividendStats } from "@/lib/analytics";
 import type { DividendItem, Position } from "@/lib/types";
-import { CATEGORY_COLORS, piesByCategoryName, pieValueByTicker, normalizePieName, tickerSplits, useAllocation, usePies, type PieLike } from "@/lib/allocation";
+import { CATEGORY_COLORS, piesByCategoryName, pieValueByTicker, normalizePieName, tickerSplits, useLiveCategories, usePies, type PieLike } from "@/lib/allocation";
 import type { HoldingSeries } from "@/app/api/portfolio-history/route";
 
 interface HistoryPayload {
@@ -66,9 +66,9 @@ function MiniHistory({ series, color, currency }: { series: CatPoint[]; color: s
 }
 
 export default function CategoryBreakdown({ positions, divStats, dividends, currency, pies: piesProp }: { positions: Position[]; divStats: TickerDividendStats[]; dividends: DividendItem[]; currency: string; pies?: PieLike[] }) {
-  const { categories } = useAllocation();
   const [data, setData] = useState<HistoryPayload | null>(null);
   const pies = usePies(piesProp); // exact per-category actuals; seeded from /api/overview when present
+  const categories = useLiveCategories(pies); // categories derived live from the T212 pies
 
   useEffect(() => {
     let cancelled = false;

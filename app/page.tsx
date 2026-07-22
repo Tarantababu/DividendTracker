@@ -334,7 +334,7 @@ export default function Dashboard() {
         <div className="mt-4">
           <Section
             title="Category allocation & deposit calculator"
-            sub="Create categories, assign stocks/ETFs with weights, set target percentages — then split any deposit so your portfolio drifts toward the targets"
+            sub="Categories are your live Trading212 pies (the source of truth) — the calculator splits any deposit so your portfolio drifts toward each pie's target"
           >
             <AllocationPlanner positions={positions} currency={cur} pies={overview.pies} />
           </Section>

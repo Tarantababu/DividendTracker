@@ -2,15 +2,15 @@
 
 import type { Position } from "@/lib/types";
 import { formatMoney } from "@/lib/analytics";
-import { categorySlices, useAllocation, usePies, type PieLike } from "@/lib/allocation";
+import { categorySlices, useLiveCategories, usePies, type PieLike } from "@/lib/allocation";
 
 /**
- * Compact target-vs-actual view of the user's category allocation.
- * Renders nothing until categories exist (created on the Allocation tab).
+ * Compact target-vs-actual view of the allocation — categories come live from the
+ * Trading212 pies (source of truth), or the saved allocation when pies are absent.
  */
 export default function CategoryOverview({ positions, currency, pies: piesProp }: { positions: Position[]; currency: string; pies?: PieLike[] }) {
-  const { categories } = useAllocation();
   const pies = usePies(piesProp);
+  const categories = useLiveCategories(pies);
 
   if (categories.length === 0) return null;
 
@@ -24,7 +24,7 @@ export default function CategoryOverview({ positions, currency, pies: piesProp }
       <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <h2 className="text-sm font-semibold tracking-wide">Allocation vs targets</h2>
-          <p className="mt-0.5 text-xs text-muted-2">Actual weight (bar) against your category targets (marker) — manage them on the Allocation tab</p>
+          <p className="mt-0.5 text-xs text-muted-2">Actual weight (bar) against each Trading212 pie's target (marker) — categories come live from your pies</p>
         </div>
       </div>
       <ul className="space-y-3">
