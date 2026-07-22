@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import type { Position } from "@/lib/types";
 import { formatMoney, prettyTicker } from "@/lib/analytics";
-import { groupByCategory, useAllocation } from "@/lib/allocation";
+import { categorySlices, useAllocation, type PieLike } from "@/lib/allocation";
 
 const COLORS = ["#6d4aff", "#8b5cf6", "#38a6f8", "#22d3ee", "#34d399", "#a78bfa", "#f5a623", "#f472b6", "#60a5fa", "#c4b5fd"];
 
@@ -19,13 +19,31 @@ interface Slice {
 export default function AllocationDonut({ positions, currency }: { positions: Position[]; currency: string }) {
   const { categories } = useAllocation();
   const [mode, setMode] = useState<"category" | "holding">("category");
+  const [pies, setPies] = useState<PieLike[] | null>(null);
   const useCategories = categories.length > 0 && mode === "category";
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/pies");
+        if (!res.ok) return;
+        const payload = (await res.json()) as { pies: PieLike[] };
+        if (!cancelled) setPies(payload.pies ?? []);
+      } catch {
+        /* fall back to reconstructed split */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const total = positions.reduce((s, p) => s + p.walletImpact.currentValue, 0);
 
   let data: Slice[];
   if (useCategories) {
-    data = groupByCategory(categories, positions)
+    data = categorySlices(categories, positions, pies)
       .filter((s) => s.value > 0)
       .map((s) => ({
         name: s.name,

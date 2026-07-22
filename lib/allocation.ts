@@ -239,3 +239,21 @@ export function groupByCategory(categories: AllocationCategory[], positions: Pos
   if (unassigned > 0.005) slices.push({ name: "Unassigned", value: unassigned, color: UNASSIGNED_COLOR, targetPct: null });
   return slices.filter((s) => s.value > 0 || s.targetPct != null);
 }
+
+/**
+ * Category slices with real Trading212 pie values when a category matches a pie
+ * (exact, no shared-ticker guessing), falling back to the reconstructed split
+ * per-category when no pie matches or pies are unavailable. The Unassigned bucket
+ * always stays reconstructed (no pie backs it). Single source of truth so every
+ * surface — donut, overview bars, breakdown, planner — shows the same numbers.
+ */
+export function categorySlices(categories: AllocationCategory[], positions: Position[], pies: PieLike[] | null): CategorySlice[] {
+  const base = groupByCategory(categories, positions);
+  if (!pies || pies.length === 0) return base;
+  const pieMap = piesByCategoryName(pies);
+  return base.map((s) => {
+    if (s.targetPct == null) return s; // Unassigned — no pie backs it
+    const pie = pieMap.get(normalizePieName(s.name));
+    return pie ? { ...s, value: pie.value } : s;
+  });
+}

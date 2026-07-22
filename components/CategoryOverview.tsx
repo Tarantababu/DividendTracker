@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { Position } from "@/lib/types";
 import { formatMoney } from "@/lib/analytics";
-import { groupByCategory, piesByCategoryName, normalizePieName, CATEGORY_COLORS, useAllocation, type PieLike, type CategorySlice } from "@/lib/allocation";
+import { categorySlices, useAllocation, type PieLike } from "@/lib/allocation";
 
 /**
  * Compact target-vs-actual view of the user's category allocation.
@@ -32,14 +32,8 @@ export default function CategoryOverview({ positions, currency }: { positions: P
 
   if (categories.length === 0) return null;
 
-  // Use real pie values when a category matches a pie; else the reconstructed split.
-  const pieMap = pies ? piesByCategoryName(pies) : new Map<string, PieLike>();
-  const slices: CategorySlice[] = pies
-    ? categories.map((c, i) => {
-        const pie = pieMap.get(normalizePieName(c.name));
-        return { name: c.name, value: pie?.value ?? 0, color: CATEGORY_COLORS[i % CATEGORY_COLORS.length], targetPct: c.targetPct };
-      })
-    : groupByCategory(categories, positions);
+  // Real pie value per category when matched; reconstructed split as fallback.
+  const slices = categorySlices(categories, positions, pies);
   const total = slices.reduce((a, s) => a + s.value, 0);
   if (total <= 0) return null;
 
