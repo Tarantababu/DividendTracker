@@ -50,3 +50,8 @@ video/assets/broll/
 video/assets/music/*
 !video/assets/music/README.md
 video/node_modules/
+
+# python (local Dia TTS venv + bytecode)
+video/.venv-dia/
+__pycache__/
+*.pyc

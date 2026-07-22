@@ -12,11 +12,16 @@
     "signals": "/signals"
   },
   "voice": {
-    "provider": "openai",
+    "provider": "dia",
     "model": "gpt-4o-mini-tts",
     "voice": "ash",
     "instructions": "You're an upbeat YouTuber narrating your own money story to a friend. Energetic but natural — never salesy or radio-announcer. Conversational pace with momentum; lean into the surprising numbers, smile through the self-deprecating lines, get a little quieter and sincere on the honest 'here's my mistake' moments, and land the final call-to-action warm and relaxed.",
-    "fallbackProvider": "say"
+    "fallbackProvider": "say",
+    "dia": {
+      "pythonBin": "python3",
+      "model": "nari-labs/Dia-1.6B-0626",
+      "device": "auto"
+    }
   },
   "render": {
     "width": 1280,

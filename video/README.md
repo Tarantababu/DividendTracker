@@ -10,6 +10,10 @@ npm run episode -- --only voice   # re-run one stage
 npm run studio               # open Remotion Studio to preview/tweak scenes
 ```
 
+You can also generate an episode from the app: open **/videos** and click
+**"Generate this week's episode"** — it runs this same pipeline locally and shows
+live progress. (Local only; the deployed site is a viewer.)
+
 Output per week in `episodes/<YYYY-Www>/`: `data.json` (all numbers), `script.json`
 (narration + metadata), `audio/`, `episode.srt`, `episode.mp4`, `upload.json`.
 

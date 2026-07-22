@@ -8,12 +8,28 @@ function fmtDuration(sec: number | null): string {
   return `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, "0")}`;
 }
 
+// Ordered pipeline stages, for the progress bar during generation.
+const STAGES = ["snapshot", "capture", "script", "broll", "voice", "subtitles", "render", "thumbnail", "publish"] as const;
+
+interface GenJob {
+  week: string;
+  upload: boolean;
+  running: boolean;
+  stage: string | null;
+  ok: boolean | null;
+  error: string | null;
+  log: string[];
+}
+
 export default function VideosPage() {
   const [episodes, setEpisodes] = useState<EpisodeInfo[] | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [uploading, setUploading] = useState<Record<string, boolean>>({});
   const [uploadMsg, setUploadMsg] = useState<Record<string, string>>({});
+  const [gen, setGen] = useState<GenJob | null>(null);
+  const [genMsg, setGenMsg] = useState<string>("");
+  const [uploadAfter, setUploadAfter] = useState(false);
 
   const load = async () => {
     try {
@@ -26,11 +42,56 @@ export default function VideosPage() {
     }
   };
 
+  const loadGen = async () => {
+    try {
+      const res = await fetch("/api/videos/generate");
+      const j = (await res.json()) as { job: GenJob | null };
+      setGen(j.job);
+      return j.job;
+    } catch {
+      return null;
+    }
+  };
+
   useEffect(() => {
     (async () => {
-      await load();
+      await Promise.all([load(), loadGen()]);
     })();
   }, []);
+
+  // While a generation is running, poll status; refresh the episode list when it ends.
+  useEffect(() => {
+    if (!gen?.running) return;
+    const t = setInterval(async () => {
+      const j = await loadGen();
+      if (j && !j.running) {
+        clearInterval(t);
+        await load();
+        setGenMsg(j.ok ? `Episode ${j.week} generated.` : `Generation failed at "${j.stage ?? "?"}"${j.error ? ` — ${j.error}` : ""}. See the log below.`);
+      }
+    }, 2500);
+    return () => clearInterval(t);
+  }, [gen?.running]);
+
+  const startGenerate = async () => {
+    setGenMsg("");
+    try {
+      const res = await fetch("/api/videos/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ upload: uploadAfter }),
+      });
+      const j = await res.json();
+      if (!res.ok) {
+        setGenMsg(j.message ?? "Could not start generation.");
+        if (j.job) setGen(j.job);
+        return;
+      }
+      setGen(j.job);
+    } catch {
+      setGenMsg("Could not reach the generator — is the local dev server running?");
+    }
+  };
 
   const upload = async (week: string) => {
     setUploading((p) => ({ ...p, [week]: true }));
@@ -54,8 +115,52 @@ export default function VideosPage() {
     <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-8">
       <h1 className="text-2xl font-bold tracking-tight">Episodes</h1>
       <p className="mt-1 text-sm text-muted">
-        Weekly FIRE-journey videos generated from this tool — script by Claude, voiced, rendered, ready for YouTube review.
+        Weekly FIRE-journey videos generated from this tool — script by Claude, voiced with Dia, rendered, ready for YouTube review.
       </p>
+
+      {/* One-click generation. Runs the full pipeline locally (needs the dev server). */}
+      <section className="mt-5 rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+          <button
+            onClick={startGenerate}
+            disabled={!!gen?.running}
+            className="rounded-xl bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+          >
+            {gen?.running ? "Generating…" : "✨ Generate this week's episode"}
+          </button>
+          <label className="flex items-center gap-2 text-xs text-muted">
+            <input type="checkbox" checked={uploadAfter} onChange={(e) => setUploadAfter(e.target.checked)} disabled={!!gen?.running} className="h-3.5 w-3.5" />
+            upload YouTube draft when done
+          </label>
+          {!gen?.running && <span className="text-xs text-muted-2">Snapshot → script → Dia voice → render{uploadAfter ? " → upload" : ""} · a few minutes, runs on this machine</span>}
+        </div>
+
+        {gen && (gen.running || gen.stage) && (
+          <div className="mt-4">
+            <div className="flex flex-wrap gap-1.5">
+              {STAGES.map((s) => {
+                const activeIdx = gen.stage ? STAGES.indexOf(gen.stage as (typeof STAGES)[number]) : -1;
+                const idx = STAGES.indexOf(s);
+                const done = gen.stage === "done" || (activeIdx > -1 && idx < activeIdx) || (!gen.running && gen.ok);
+                const active = gen.running && gen.stage === s;
+                return (
+                  <span
+                    key={s}
+                    className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${active ? "bg-[var(--primary)] text-white" : done ? "bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] text-accent" : "bg-surface text-muted-2"}`}
+                  >
+                    {active ? "▸ " : done ? "✓ " : ""}
+                    {s}
+                  </span>
+                );
+              })}
+            </div>
+            {gen.log?.length > 0 && (
+              <pre className="mt-3 max-h-40 overflow-auto rounded-lg bg-black/90 p-3 text-[11px] leading-relaxed text-green-300">{gen.log.join("\n")}</pre>
+            )}
+          </div>
+        )}
+        {genMsg && <p className={`mt-3 text-xs ${gen && !gen.running && gen.ok ? "text-accent" : "text-red"}`}>{genMsg}</p>}
+      </section>
 
       {!episodes && <div className="mt-8 flex h-32 items-center justify-center text-sm text-muted-2">Loading episodes…</div>}
 

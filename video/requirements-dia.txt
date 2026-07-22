@@ -1,0 +1,16 @@
+# Local Dia TTS (nari-labs/dia) — used by the "voice" pipeline stage.
+# Install into a Python venv, then point video/config.json voice.dia.pythonBin at it.
+#
+#   cd video
+#   python3 -m venv .venv-dia
+#   source .venv-dia/bin/activate
+#   pip install -r requirements-dia.txt
+#   # set "pythonBin": "video/.venv-dia/bin/python" (or an absolute path) in config.json
+#
+# Notes:
+# - First run downloads the ~1.6B model (~3GB) from Hugging Face to ~/.cache.
+# - GPU (CUDA) is fastest; Apple Silicon uses MPS; CPU works but is slow.
+# - English only. Falls back to OpenAI/`say` automatically if this isn't installed.
+
+dia @ git+https://github.com/nari-labs/dia.git
+soundfile

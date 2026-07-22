@@ -18,7 +18,16 @@ export interface VideoConfig {
   targetMinutes: number;
   storyline: string;
   screenshots: Record<string, string>;
-  voice: { provider: string; model: string; voice: string; instructions?: string; fallbackProvider: string };
+  voice: {
+    provider: string; // "dia" | "openai" | "say"
+    model: string;
+    voice: string;
+    instructions?: string;
+    fallbackProvider: string;
+    // Local Dia model (nari-labs/dia). Requires a Python env with the `dia`
+    // package installed — see video/README.md. Falls back automatically if absent.
+    dia?: { pythonBin?: string; model?: string; device?: string; seed?: number };
+  };
   broll: { enabled: boolean; maxClipMb: number; orientation: string };
   music: { volume: number };
   render: { width: number; height: number; fps: number; minFreeDiskGb: number };
