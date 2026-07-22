@@ -5,7 +5,7 @@ import { Area, AreaChart, Line, ResponsiveContainer, Tooltip } from "recharts";
 import { formatMoney } from "@/lib/analytics";
 import type { TickerDividendStats } from "@/lib/analytics";
 import type { DividendItem, Position } from "@/lib/types";
-import { CATEGORY_COLORS, piesByCategoryName, pieValueByTicker, normalizePieName, tickerSplits, useAllocation, type PieLike } from "@/lib/allocation";
+import { CATEGORY_COLORS, piesByCategoryName, pieValueByTicker, normalizePieName, tickerSplits, useAllocation, usePies, type PieLike } from "@/lib/allocation";
 import type { HoldingSeries } from "@/app/api/portfolio-history/route";
 
 interface HistoryPayload {
@@ -68,7 +68,7 @@ function MiniHistory({ series, color, currency }: { series: CatPoint[]; color: s
 export default function CategoryBreakdown({ positions, divStats, dividends, currency }: { positions: Position[]; divStats: TickerDividendStats[]; dividends: DividendItem[]; currency: string }) {
   const { categories } = useAllocation();
   const [data, setData] = useState<HistoryPayload | null>(null);
-  const [pies, setPies] = useState<PieLike[] | null>(null);
+  const pies = usePies(); // deduped page-wide; real pies give exact per-category actuals
 
   useEffect(() => {
     let cancelled = false;
@@ -80,17 +80,6 @@ export default function CategoryBreakdown({ positions, divStats, dividends, curr
         if (!cancelled) setData(payload);
       } catch {
         /* history is optional enrichment */
-      }
-    })();
-    // Real pies give exact per-category actuals (value, invested, dividends)
-    (async () => {
-      try {
-        const res = await fetch("/api/pies");
-        if (!res.ok) return;
-        const payload = (await res.json()) as { pies: PieLike[] };
-        if (!cancelled) setPies(payload.pies ?? []);
-      } catch {
-        /* fall back to the allocation split */
       }
     })();
     return () => {

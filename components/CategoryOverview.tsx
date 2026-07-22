@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import type { Position } from "@/lib/types";
 import { formatMoney } from "@/lib/analytics";
-import { categorySlices, useAllocation, type PieLike } from "@/lib/allocation";
+import { categorySlices, useAllocation, usePies } from "@/lib/allocation";
 
 /**
  * Compact target-vs-actual view of the user's category allocation.
@@ -11,24 +10,7 @@ import { categorySlices, useAllocation, type PieLike } from "@/lib/allocation";
  */
 export default function CategoryOverview({ positions, currency }: { positions: Position[]; currency: string }) {
   const { categories } = useAllocation();
-  const [pies, setPies] = useState<PieLike[] | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/pies");
-        if (!res.ok) return;
-        const payload = (await res.json()) as { pies: PieLike[] };
-        if (!cancelled) setPies(payload.pies ?? []);
-      } catch {
-        /* fall back to reconstructed split */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const pies = usePies();
 
   if (categories.length === 0) return null;
 

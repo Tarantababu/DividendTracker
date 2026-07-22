@@ -154,6 +154,57 @@ export function piesByCategoryName(pies: PieLike[]): Map<string, PieLike> {
   return new Map(pies.map((p) => [normalizePieName(p.name), p]));
 }
 
+// Deduped client fetch of /api/pies. Four dashboard components consume pies; if
+// each fetched on its own, a cold serverless cache would fan out into 4x the
+// Trading212 calls and trip the pies-endpoint rate limit (→ 502 → null pies →
+// wrong shared-ticker categories like Mavi). This shares ONE in-flight request
+// and its result across every consumer, page-wide, with a single retry.
+let piesCache: PieLike[] | null = null;
+let piesPromise: Promise<PieLike[]> | null = null;
+
+async function fetchPiesOnce(): Promise<PieLike[]> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await fetch("/api/pies");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const payload = (await res.json()) as { pies?: PieLike[] };
+      return payload.pies ?? [];
+    } catch (err) {
+      if (attempt === 2) throw err;
+      await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+    }
+  }
+  return [];
+}
+
+/** Real Trading212 pies, fetched once per page and shared by all consumers. */
+export function usePies(): PieLike[] | null {
+  const [pies, setPies] = useState<PieLike[] | null>(piesCache);
+  useEffect(() => {
+    if (piesCache) {
+      setPies(piesCache);
+      return;
+    }
+    let cancelled = false;
+    if (!piesPromise) {
+      piesPromise = fetchPiesOnce()
+        .then((p) => {
+          piesCache = p;
+          return p;
+        })
+        .catch((e) => {
+          piesPromise = null; // allow a later mount to retry
+          throw e;
+        });
+    }
+    piesPromise.then((p) => !cancelled && setPies(p)).catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return pies;
+}
+
 /** Total current value of a ticker across all pies — the denominator for its real
  *  per-pie share (a ticker held in several pies splits by these actual values). */
 export function pieValueByTicker(pies: PieLike[]): Map<string, number> {

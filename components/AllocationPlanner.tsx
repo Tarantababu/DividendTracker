@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatMoney, prettyTicker } from "@/lib/analytics";
 import type { Position } from "@/lib/types";
-import { loadAllocation, saveAllocation, tickerSplits, piesByCategoryName, normalizePieName, type AllocationCategory as Category, type AllocationMember as Member, type PieLike } from "@/lib/allocation";
+import { loadAllocation, saveAllocation, tickerSplits, piesByCategoryName, normalizePieName, usePies, type AllocationCategory as Category, type AllocationMember as Member, type PieLike } from "@/lib/allocation";
 
 interface SearchResult {
   symbol: string;
@@ -56,23 +56,7 @@ export default function AllocationPlanner({ positions, currency }: { positions: 
     saveAllocation({ categories: cats, deposit: dep });
   }, []);
 
-  const [pies, setPies] = useState<PieLike[] | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/pies");
-        if (!res.ok) return;
-        const j = (await res.json()) as { pies: PieLike[] };
-        if (!cancelled) setPies(j.pies ?? []);
-      } catch {
-        /* fall back to the reconstructed split */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const pies = usePies();
 
   const holdingValue = useMemo(() => {
     const map = new Map<string, number>();
