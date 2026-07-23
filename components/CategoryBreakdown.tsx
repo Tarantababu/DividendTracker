@@ -6,6 +6,7 @@ import { formatMoney } from "@/lib/analytics";
 import type { TickerDividendStats } from "@/lib/analytics";
 import type { DividendItem, Position } from "@/lib/types";
 import { CATEGORY_COLORS, piesByCategoryName, pieValueByTicker, normalizePieName, tickerSplits, useLiveCategories, usePies, type PieLike } from "@/lib/allocation";
+import { openHistory } from "@/components/HistoryModal";
 import type { HoldingSeries } from "@/app/api/portfolio-history/route";
 
 interface HistoryPayload {
@@ -30,6 +31,7 @@ interface CategoryStat {
   yieldOnValue: number | null;
   yieldOnCost: number | null;
   series: CatPoint[]; // value + invested + total-return over time
+  members: { ticker: string; frac: number }[]; // for the click-through history modal
 }
 
 function fmtPct(v: number | null): string {
@@ -191,6 +193,7 @@ export default function CategoryBreakdown({ positions, divStats, dividends, curr
         yieldOnValue: value > 0 ? ttm / value : null,
         yieldOnCost: invested > 0 ? ttm / invested : null,
         series,
+        members: members.map((m) => ({ ticker: m.t, frac: m.frac })),
       };
     });
   }, [categories, positions, divStats, dividends, data, pies]);
@@ -215,7 +218,13 @@ export default function CategoryBreakdown({ positions, divStats, dividends, curr
             <div key={s.name} className="rounded-xl border border-border bg-surface/40 p-4">
               <div className="flex items-center gap-2">
                 <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: s.color }} />
-                <span className="text-sm font-semibold">{s.name}</span>
+                <button
+                  onClick={() => openHistory({ kind: "category", name: s.name, color: s.color, members: s.members })}
+                  className="text-sm font-semibold hover:text-primary hover:underline"
+                  title="Show this category's history"
+                >
+                  {s.name}
+                </button>
                 <span
                   className={`num ml-auto text-xs ${totalReturn >= 0 ? "text-accent" : "text-red"}`}
                   title="Total return on invested (net deposits) — market gain plus dividends"

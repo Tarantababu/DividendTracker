@@ -20,6 +20,7 @@ import CategoryBreakdown from "@/components/CategoryBreakdown";
 import DailyStatus from "@/components/DailyStatus";
 import MonthlyChart from "@/components/MonthlyChart";
 import AllocationDonut from "@/components/AllocationDonut";
+import HistoryModal from "@/components/HistoryModal";
 import HoldingsTable from "@/components/HoldingsTable";
 import ForecastPanel from "@/components/ForecastPanel";
 import DividendHistory from "@/components/DividendHistory";
@@ -421,6 +422,9 @@ export default function Dashboard() {
       <footer className="mt-10 pb-4 text-center text-[11px] text-muted-2">
         Local-only tool · data via Trading212 public API · forecasts are estimates, not financial advice
       </footer>
+
+      {/* Opened by clicking any ticker or category name (see openHistory) */}
+      <HistoryModal currency={cur} />
     </main>
   );
 }

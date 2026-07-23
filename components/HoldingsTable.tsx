@@ -5,6 +5,7 @@ import type { Position } from "@/lib/types";
 import type { TickerDividendStats } from "@/lib/analytics";
 import { formatMoney, formatPct, prettyTicker } from "@/lib/analytics";
 import { tickerCategoryIndex, useAllocation } from "@/lib/allocation";
+import { openHistory } from "@/components/HistoryModal";
 
 type SortKey = "value" | "pl" | "yield" | "ttm" | "weight" | "cat";
 
@@ -100,7 +101,13 @@ export default function HoldingsTable({
             return (
               <tr key={p.instrument.ticker} className="border-b border-border-soft transition-colors hover:bg-card-hover">
                 <td className="max-w-56 px-3 py-2.5">
-                  <div className="font-medium">{prettyTicker(p.instrument.ticker)}</div>
+                  <button
+                    onClick={() => openHistory({ kind: "ticker", ticker: p.instrument.ticker, name: p.instrument.name || prettyTicker(p.instrument.ticker), color: cat?.color })}
+                    className="text-left font-medium hover:text-primary hover:underline"
+                    title="Show this holding's history"
+                  >
+                    {prettyTicker(p.instrument.ticker)}
+                  </button>
                   <div className="truncate text-xs text-muted-2">{p.instrument.name}</div>
                 </td>
                 {hasCategories && (
