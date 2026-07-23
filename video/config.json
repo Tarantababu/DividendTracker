@@ -12,10 +12,10 @@
     "signals": "/signals"
   },
   "voice": {
-    "provider": "dia-remote",
+    "provider": "openai",
     "model": "gpt-4o-mini-tts",
-    "voice": "ash",
-    "instructions": "You're an upbeat YouTuber narrating your own money story to a friend. Energetic but natural — never salesy or radio-announcer. Conversational pace with momentum; lean into the surprising numbers, smile through the self-deprecating lines, get a little quieter and sincere on the honest 'here's my mistake' moments, and land the final call-to-action warm and relaxed.",
+    "voice": "onyx",
+    "instructions": "One narrator only: an energetic, trustworthy man in his 30s — a real YouTuber walking viewers through his own investing and retirement (FIRE) journey. Warm, confident, and genuine, like talking to a friend across the table. Natural conversational delivery at a normal, unhurried pace — NOT fast, NOT rushed, never a hyped radio-announcer or salesman. Clear and grounded; lean into the surprising numbers, stay sincere and a little quieter on the honest 'here's my mistake' moments, and land the closing call-to-action relaxed and encouraging.",
     "fallbackProvider": "say",
     "dia": {
       "pythonBin": "python3",
