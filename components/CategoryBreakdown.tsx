@@ -208,7 +208,6 @@ export default function CategoryBreakdown({ positions, divStats, dividends, curr
       <div className="grid gap-4 sm:grid-cols-2">
         {stats.map((s) => {
           const gain = s.value - s.invested;
-          const gainPct = s.invested > 0 ? gain / s.invested : 0;
           // Total return counts dividends taken out as cash on top of the market gain
           const totalReturn = gain + s.allDividends;
           const totalReturnPct = s.invested > 0 ? totalReturn / s.invested : 0;
@@ -217,9 +216,12 @@ export default function CategoryBreakdown({ positions, divStats, dividends, curr
               <div className="flex items-center gap-2">
                 <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: s.color }} />
                 <span className="text-sm font-semibold">{s.name}</span>
-                <span className={`num ml-auto text-xs ${gain >= 0 ? "text-accent" : "text-red"}`}>
-                  {gain >= 0 ? "+" : ""}
-                  {formatMoney(gain, currency, 0)} ({(gainPct * 100).toFixed(1)}%)
+                <span
+                  className={`num ml-auto text-xs ${totalReturn >= 0 ? "text-accent" : "text-red"}`}
+                  title="Total return on invested (net deposits) — market gain plus dividends"
+                >
+                  {totalReturn >= 0 ? "+" : ""}
+                  {formatMoney(totalReturn, currency, 0)} ({(totalReturnPct * 100).toFixed(1)}%)
                 </span>
               </div>
 

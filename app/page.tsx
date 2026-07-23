@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { DividendsPayload, OverviewPayload } from "@/lib/types";
+import type { FirePayload } from "@/app/api/fire/route";
 import {
   annualGrowthPerHolding,
   dividendGrowthByYear,
@@ -105,6 +106,7 @@ export default function Dashboard() {
   const [needsSetup, setNeedsSetup] = useState(false);
   const [loading, setLoading] = useState(true);
   const [progress, setProgress] = useState(0.06);
+  const [fire, setFire] = useState<FirePayload | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [tab, setTab] = useState<TabId>("overview");
 
@@ -162,6 +164,26 @@ export default function Dashboard() {
     load(false);
   }, [load]);
 
+  // Net deposits + total return (money-weighted), fetched separately so it never
+  // blocks the main render — the Invested/P&L cards upgrade from cost-basis to
+  // net-deposit numbers once this lands.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/fire");
+        if (!res.ok) return;
+        const j = (await res.json()) as FirePayload;
+        if (!cancelled) setFire(j);
+      } catch {
+        /* fall back to cost-basis numbers */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const stats = useMemo(() => {
     if (!overview || !dividends) return null;
     const currency = overview.summary.currency;
@@ -214,6 +236,13 @@ export default function Dashboard() {
   const cur = stats.currency;
   const cash = summary.cash.availableToTrade + summary.cash.inPies + summary.cash.reservedForOrders;
   const pl = summary.investments.unrealizedProfitLoss;
+  // "Invested" = net deposits (real money you put in, deposits − withdrawals), from
+  // /api/fire. Total P/L = current total value − net deposits, i.e. everything the
+  // money earned (dividends + realised + unrealised + interest). Falls back to the
+  // holdings cost basis until the fire payload arrives.
+  const netInvested = fire ? fire.netContributions : summary.investments.totalCost;
+  const totalReturn = fire ? fire.growth : pl;
+  const totalReturnPct = netInvested > 0 ? totalReturn / netInvested : null;
 
   return (
     <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-8">
@@ -237,12 +266,16 @@ export default function Dashboard() {
       {/* Macro picture */}
       <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 md:grid-cols-4">
         <StatCard label="Total value" value={formatMoney(summary.totalValue, cur)} sub={`${positions.length} holdings`} />
-        <StatCard label="Invested" value={formatMoney(summary.investments.currentValue, cur)} sub={`cost ${formatMoney(summary.investments.totalCost, cur)}`} />
         <StatCard
-          label="Unrealised P/L"
-          value={formatMoney(pl, cur)}
-          sub={summary.investments.totalCost > 0 ? formatPct(pl / summary.investments.totalCost) : undefined}
-          tone={pl >= 0 ? "positive" : "negative"}
+          label="Invested"
+          value={formatMoney(netInvested, cur)}
+          sub={fire ? "net deposits" : `cost basis · value ${formatMoney(summary.investments.currentValue, cur)}`}
+        />
+        <StatCard
+          label="Total P/L"
+          value={formatMoney(totalReturn, cur)}
+          sub={`${totalReturnPct != null ? formatPct(totalReturnPct) : ""}${fire ? " · incl. dividends" : " · unrealised"}`}
+          tone={totalReturn >= 0 ? "positive" : "negative"}
         />
         <StatCard label="Cash" value={formatMoney(cash, cur)} sub={`realised P/L ${formatMoney(summary.investments.realizedProfitLoss, cur)}`} />
         <StatCard label="Yield" value={formatPct(stats.portfolioYield)} sub={`${formatPct(stats.yieldOnCost)} yield on cost`} tone="primary" />
