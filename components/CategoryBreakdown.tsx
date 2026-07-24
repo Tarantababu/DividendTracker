@@ -221,7 +221,7 @@ export default function CategoryBreakdown({ positions, divStats, dividends, curr
               <div className="flex items-center gap-2">
                 <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: s.color }} />
                 <button
-                  onClick={() => openHistory({ kind: "category", name: s.name, color: s.color, members: s.members })}
+                  onClick={() => openHistory({ kind: "category", name: s.name, color: s.color, members: s.members, netInvested: s.invested })}
                   className="text-sm font-semibold hover:text-primary hover:underline"
                   title="Show this category's history"
                 >

@@ -9,7 +9,9 @@ import type { PortfolioHistoryPayload } from "@/app/api/portfolio-history/route"
 // per-holding series. For a category, `members` carries each ticker's share.
 export type HistoryTarget =
   | { kind: "ticker"; ticker: string; name: string; color?: string }
-  | { kind: "category"; name: string; color?: string; members: { ticker: string; frac: number }[] };
+  // netInvested = the category's real net deposits (from the override); the invested
+  // line is anchored to end at it so the modal matches the Category-performance card.
+  | { kind: "category"; name: string; color?: string; members: { ticker: string; frac: number }[]; netInvested?: number };
 
 const OPEN_EVENT = "open-history";
 
@@ -43,7 +45,7 @@ function buildSeries(payload: PortfolioHistoryPayload, target: HistoryTarget): P
     if (!h) return [];
     return dates.map((d, i) => ({ date: d, value: h.values[i] ?? 0, invested: h.costs[i] ?? 0 }));
   }
-  return dates.map((d, i) => {
+  const pts = dates.map((d, i) => {
     let value = 0;
     let invested = 0;
     for (const m of target.members) {
@@ -55,6 +57,16 @@ function buildSeries(payload: PortfolioHistoryPayload, target: HistoryTarget): P
     }
     return { date: d, value, invested };
   });
+  // The reconstructed invested line ends at cost basis. The card shows net deposits,
+  // so scale the whole line to end there — same shape, matching endpoint.
+  if (target.netInvested != null) {
+    const lastCost = [...pts].reverse().find((p) => p.invested > 0)?.invested ?? 0;
+    if (lastCost > 0) {
+      const f = target.netInvested / lastCost;
+      for (const p of pts) p.invested *= f;
+    }
+  }
+  return pts;
 }
 
 export default function HistoryModal({ currency }: { currency: string }) {
