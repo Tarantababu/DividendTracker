@@ -135,7 +135,8 @@ export interface CategoryLookup {
 export interface PieLike {
   name: string;
   value: number;
-  invested: number;
+  invested: number; // cost basis
+  netDeposits?: number; // real money in − out (from override); falls back to `invested`
   result: number;
   dividendGained: number;
   cash: number;

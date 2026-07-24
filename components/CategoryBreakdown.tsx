@@ -135,9 +135,10 @@ export default function CategoryBreakdown({ positions, divStats, dividends, curr
       let ttm = 0;
       let allDiv = 0;
       if (pie) {
-        // Exact top-line numbers straight from the pie
+        // Exact top-line numbers straight from the pie. "Invested" = real net
+        // deposits (money in − out) when known, else T212's cost basis.
         value = pie.value;
-        invested = pie.invested;
+        invested = pie.netDeposits ?? pie.invested;
         allDiv = pie.dividendGained;
         // TTM income can't come from the pie summary — scale each member's TTM by its pie share
         for (const { t, frac } of members) ttm += (divByTicker.get(t)?.ttm ?? 0) * frac;
@@ -210,10 +211,11 @@ export default function CategoryBreakdown({ positions, divStats, dividends, curr
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         {stats.map((s) => {
+          // P/L against net deposits (money in − out). Dividends are shown separately
+          // below rather than added here, so reinvesting pies (whose dividends are
+          // already reflected in the value) aren't double-counted.
           const gain = s.value - s.invested;
-          // Total return counts dividends taken out as cash on top of the market gain
-          const totalReturn = gain + s.allDividends;
-          const totalReturnPct = s.invested > 0 ? totalReturn / s.invested : 0;
+          const gainPct = s.invested > 0 ? gain / s.invested : 0;
           return (
             <div key={s.name} className="rounded-xl border border-border bg-surface/40 p-4">
               <div className="flex items-center gap-2">
@@ -226,11 +228,11 @@ export default function CategoryBreakdown({ positions, divStats, dividends, curr
                   {s.name}
                 </button>
                 <span
-                  className={`num ml-auto text-xs ${totalReturn >= 0 ? "text-accent" : "text-red"}`}
-                  title="Total return on invested (net deposits) — market gain plus dividends"
+                  className={`num ml-auto text-xs ${gain >= 0 ? "text-accent" : "text-red"}`}
+                  title="P/L vs net deposits (money you put in). Dividends shown separately below."
                 >
-                  {totalReturn >= 0 ? "+" : ""}
-                  {formatMoney(totalReturn, currency, 0)} ({(totalReturnPct * 100).toFixed(1)}%)
+                  {gain >= 0 ? "+" : ""}
+                  {formatMoney(gain, currency, 0)} ({(gainPct * 100).toFixed(1)}%)
                 </span>
               </div>
 
@@ -244,7 +246,7 @@ export default function CategoryBreakdown({ positions, divStats, dividends, curr
                   <dd className="font-medium">{formatMoney(s.value, currency, 0)}</dd>
                 </div>
                 <div className="flex justify-between">
-                  <dt className="text-muted">Invested</dt>
+                  <dt className="text-muted" title="Net deposits — real money in − out (from your Trading212 pie)">Invested</dt>
                   <dd className="font-medium">{formatMoney(s.invested, currency, 0)}</dd>
                 </div>
                 <div className="flex justify-between">
@@ -260,19 +262,10 @@ export default function CategoryBreakdown({ positions, divStats, dividends, curr
                   <dd className="font-medium text-accent">{fmtPct(s.yieldOnCost)}</dd>
                 </div>
                 <div className="flex justify-between border-t border-border-soft pt-1.5">
-                  <dt className="text-muted" title="Dividends received since inception">
+                  <dt className="text-muted" title="Dividends received since inception (shown separately; not added to the P/L above to avoid double-counting reinvested dividends)">
                     Dividends
                   </dt>
                   <dd className="font-medium">{formatMoney(s.allDividends, currency, 0)}</dd>
-                </div>
-                <div className="flex justify-between border-t border-border-soft pt-1.5">
-                  <dt className="text-muted" title="Market gain + dividends received">
-                    Total return
-                  </dt>
-                  <dd className={`font-medium ${totalReturn >= 0 ? "text-accent" : "text-red"}`}>
-                    {totalReturn >= 0 ? "+" : ""}
-                    {formatMoney(totalReturn, currency, 0)} ({(totalReturnPct * 100).toFixed(1)}%)
-                  </dd>
                 </div>
               </dl>
             </div>

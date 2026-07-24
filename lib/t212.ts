@@ -69,12 +69,41 @@ export interface PieSummary {
   id: number;
   name: string;
   value: number; // pie current value (excl. pie cash)
-  invested: number;
+  invested: number; // cost basis of current holdings (T212 priceAvgInvestedValue)
+  netDeposits: number; // real money in − out; from the override file, else falls back to `invested`
   result: number; // unrealised P/L
   resultCoef: number;
   dividendGained: number; // dividends earned in this pie, all-time
   cash: number; // uninvested cash sitting in the pie
   instruments: PieInstrument[];
+}
+
+/**
+ * Per-pie NET DEPOSITS (money in − out). Trading212's API exposes only cost basis
+ * (priceAvgInvestedValue), never net deposits per pie, and it can't be reconstructed
+ * from order history (dividend reinvestments are untaggable). So the real figures are
+ * read from .cache/net-deposits.json (keyed by exact pie name), maintained by hand.
+ */
+async function loadNetDepositOverrides(): Promise<Record<string, number>> {
+  const out: Record<string, number> = {};
+  const merge = (parsed: Record<string, unknown>) => {
+    for (const [k, v] of Object.entries(parsed)) if (typeof v === "number") out[k] = v;
+  };
+  // Local file (gitignored, private) for local dev.
+  try {
+    merge(JSON.parse(await fs.readFile(path.join(CACHE_DIR, "net-deposits.json"), "utf8")));
+  } catch {
+    /* no file */
+  }
+  // Env var (JSON) so the deployed app can have them without committing to a public repo.
+  if (process.env.PIE_NET_DEPOSITS) {
+    try {
+      merge(JSON.parse(process.env.PIE_NET_DEPOSITS));
+    } catch {
+      /* malformed env */
+    }
+  }
+  return out;
 }
 
 interface PieListItem {
@@ -95,15 +124,18 @@ interface PieDetail {
  * One list call + one detail call per pie; paced by the shared 429 backoff.
  */
 export async function getPies(): Promise<PieSummary[]> {
-  const list = await t212Get<PieListItem[]>("/api/v0/equity/pies");
+  const [list, overrides] = await Promise.all([t212Get<PieListItem[]>("/api/v0/equity/pies"), loadNetDepositOverrides()]);
   const out: PieSummary[] = [];
   for (const p of list) {
     const detail = await t212Get<PieDetail>(`/api/v0/equity/pies/${p.id}`);
+    const name = detail.settings?.name ?? `Pie ${p.id}`;
     out.push({
       id: p.id,
-      name: detail.settings?.name ?? `Pie ${p.id}`,
+      name,
       value: p.result.priceAvgValue,
       invested: p.result.priceAvgInvestedValue,
+      // real net deposits from the override; if absent, cost basis is the best proxy
+      netDeposits: overrides[name] ?? p.result.priceAvgInvestedValue,
       result: p.result.priceAvgResult,
       resultCoef: p.result.priceAvgResultCoef,
       dividendGained: p.dividendDetails?.gained ?? 0,
