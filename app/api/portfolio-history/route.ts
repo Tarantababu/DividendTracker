@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
-import { getPositions, T212Error } from "@/lib/t212";
+import { getPositions, syncOrders, T212Error } from "@/lib/t212";
 import { prettyTicker } from "@/lib/analytics";
 import { CACHE_DIR } from "@/lib/cacheDir";
 import type { Position } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 120;
+export const maxDuration = 300; // cold Vercel instances also sync the full order history here
 
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)";
 const SYMBOL_MAP_FILE = path.join(CACHE_DIR, "yahoo-symbols.json");
@@ -232,11 +232,11 @@ export async function GET(req: NextRequest) {
   }
   const fillsByTicker = new Map<string, Fill[]>();
   try {
-    const raw = await fs.readFile(path.join(CACHE_DIR, "orders.json"), "utf8");
-    const parsed = JSON.parse(raw) as {
-      items?: Array<{ order: { ticker: string; side: string; status?: string }; fill?: { quantity?: number; filledAt?: string; walletImpact?: { netValue?: number } } }>;
-    };
-    for (const it of parsed.items ?? []) {
+    // Sync (and cache) the order fills ourselves rather than reading a file another
+    // route wrote — on Vercel each request may hit a fresh instance with an empty
+    // /tmp, so relying on the file gave a degraded flat reconstruction there.
+    const ordersCache = await syncOrders(false);
+    for (const it of ordersCache.items) {
       if (!it.fill?.filledAt) continue;
       const sign = it.order.side === "SELL" ? -1 : 1;
       const arr = fillsByTicker.get(it.order.ticker) ?? [];
@@ -245,7 +245,7 @@ export async function GET(req: NextRequest) {
     }
     for (const arr of fillsByTicker.values()) arr.sort((a, b) => a.date.localeCompare(b.date));
   } catch {
-    /* no orders cache → fall back to flat holdings (fractions default to 1) */
+    /* order sync failed → fall back to flat holdings (fractions default to 1) */
   }
 
   const unresolved: string[] = [];
