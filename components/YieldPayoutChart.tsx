@@ -1,6 +1,7 @@
 "use client";
 
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { tooltipStyle } from "@/lib/chartTheme";
 import type { TickerDividendStats } from "@/lib/analytics";
 import { formatMoney, formatPct, prettyTicker } from "@/lib/analytics";
 
@@ -25,7 +26,7 @@ export default function YieldPayoutChart({ divStats, currency }: { divStats: Tic
           <YAxis tick={{ fill: "var(--muted-2)", fontSize: 11 }} axisLine={false} tickLine={false} width={40} tickFormatter={(v: number) => `${v}%`} />
           <Tooltip
             cursor={{ fill: "rgba(0,0,0,0.04)" }}
-            contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, color: "var(--foreground)", fontSize: 12 }}
+            contentStyle={tooltipStyle}
             formatter={(v, name) => [
               name === "yieldPct" ? formatPct(Number(v) / 100) : formatMoney(Number(v), currency),
               name === "yieldPct" ? "Yield (ttm)" : "Dividends 12m",

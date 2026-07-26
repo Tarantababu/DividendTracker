@@ -126,7 +126,7 @@ export default function AiAnalysis() {
           onChange={(e) => setNotes(e.target.value.slice(0, MAX_NOTES_CHARS))}
           rows={3}
           placeholder={'e.g. "I want to buy a flat in ~5 years, so part of this money isn\'t forever-invested. I pay 15% withholding tax on US dividends. Should I drop the covered-call funds?"'}
-          className="mt-1 block w-full resize-y rounded-xl border border-border bg-surface px-3 py-2 text-sm leading-relaxed outline-none placeholder:text-muted-2 focus:border-muted-2"
+          className="mt-1 block w-full resize-y rounded-md border border-border bg-surface px-3 py-2 text-sm leading-relaxed outline-none placeholder:text-muted-2 focus:border-muted-2"
         />
         {notes.length > MAX_NOTES_CHARS - 200 && (
           <span className="num mt-1 block text-right text-[11px] text-muted-2">{notes.length}/{MAX_NOTES_CHARS}</span>
@@ -143,7 +143,7 @@ export default function AiAnalysis() {
             onChange={(e) => setAge(e.target.value)}
             onWheel={(e) => (e.target as HTMLInputElement).blur()}
             placeholder="e.g. 32"
-            className="num mt-1 block w-28 rounded-xl border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-muted-2"
+            className="num mt-1 block w-28 rounded-md border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-muted-2"
           />
         </label>
         <button

@@ -1,6 +1,7 @@
 "use client";
 
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { tooltipStyle } from "@/lib/chartTheme";
 import type { TickerDividendStats } from "@/lib/analytics";
 import { formatMoney, prettyTicker } from "@/lib/analytics";
 
@@ -29,7 +30,7 @@ export default function DividendsByHolding({ divStats, currency }: { divStats: T
           <YAxis tick={{ fill: "var(--muted-2)", fontSize: 11 }} axisLine={false} tickLine={false} width={48} tickFormatter={(v: number) => formatMoney(v, currency, 0)} />
           <Tooltip
             cursor={{ fill: "rgba(0,0,0,0.04)" }}
-            contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, color: "var(--foreground)", fontSize: 12 }}
+            contentStyle={tooltipStyle}
             formatter={(v, name) => [formatMoney(Number(v), currency), name === "allTime" ? "All-time" : "Last 12m"]}
             labelFormatter={(label, payload) => (payload?.[0]?.payload as { fullName?: string })?.fullName ?? String(label)}
           />

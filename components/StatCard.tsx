@@ -1,3 +1,5 @@
+import { cn } from "@/lib/utils";
+
 interface StatCardProps {
   label: string;
   value: string;
@@ -13,12 +15,16 @@ const toneClass: Record<NonNullable<StatCardProps["tone"]>, string> = {
   primary: "text-primary",
 };
 
+/**
+ * Key figure. One hierarchy used everywhere: eyebrow label, dominant tabular
+ * number, quiet context line. Depth comes from the border, not a shadow.
+ */
 export default function StatCard({ label, value, sub, tone = "default" }: StatCardProps) {
   return (
-    <div className="min-w-0 rounded-2xl border border-border bg-card px-5 py-4 shadow-sm">
-      <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-2">{label}</div>
-      <div className={`num mt-1.5 text-xl font-semibold sm:text-2xl ${toneClass[tone]}`}>{value}</div>
-      {sub && <div className="num mt-1 text-xs text-muted">{sub}</div>}
+    <div className="min-w-0 rounded-xl border border-border bg-card px-4 py-3.5 shadow-xs transition-colors hover:border-border-strong sm:px-5 sm:py-4">
+      <div className="eyebrow truncate">{label}</div>
+      <div className={cn("metric mt-1.5 truncate text-xl sm:text-2xl", toneClass[tone])}>{value}</div>
+      {sub && <div className="num mt-1 truncate text-xs text-muted-2">{sub}</div>}
     </div>
   );
 }

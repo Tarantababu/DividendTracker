@@ -1,24 +1,65 @@
 @import "tailwindcss";
 
+/* ============================================================================
+   Design tokens — "precision fintech"
+   Neutral greys + one accent, a strict 4px spatial grid, restrained elevation
+   and tabular numerals. Colour is reserved for meaning (gain / loss / action),
+   never decoration, so the numbers carry the page.
+   ========================================================================== */
+
 :root {
-  --background: #f6f7f9;
-  --surface: #eef0f4;
+  /* --- Surfaces: a short, deliberate ramp (page → card → inset) --- */
+  --background: #f7f8fa;
+  --surface: #f0f2f6;
   --card: #ffffff;
-  --card-hover: #f4f6f9;
-  --border: #e3e7ee;
-  --border-soft: #edf0f5;
-  --foreground: #171a21;
-  --muted: #5b6472;
-  --muted-2: #8a93a3;
-  --accent: #059669;
-  --accent-dim: rgba(5, 150, 105, 0.1);
-  --primary: #6d4aff;
-  --primary-dim: rgba(109, 74, 255, 0.1);
-  --blue: #38a6f8;
-  --blue-dim: rgba(56, 166, 248, 0.1);
-  --amber: #f5a623;
-  --red: #dc2626;
-  --violet: #8b5cf6;
+  --card-hover: #f7f8fb;
+  --border: #e2e6ec;
+  --border-soft: #edf0f4;
+  --border-strong: #cfd5df;
+
+  /* --- Text: three levels only. More than three reads as noise. --- */
+  --foreground: #0e1117;
+  --muted: #59616f;
+  --muted-2: #8a92a1;
+
+  /* --- One action colour --- */
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --primary-fg: #ffffff;
+  --primary-dim: rgba(79, 70, 229, 0.09);
+  --ring: rgba(79, 70, 229, 0.35);
+
+  /* --- Semantic: direction of money --- */
+  --accent: #06855b; /* gain */
+  --accent-dim: rgba(6, 133, 91, 0.1);
+  --red: #d0342c; /* loss */
+  --red-dim: rgba(208, 52, 44, 0.1);
+
+  /* --- Categorical (charts, category chips) — muted so one highlight wins --- */
+  --blue: #3b82f6;
+  --blue-dim: rgba(59, 130, 246, 0.1);
+  --amber: #d98207;
+  --violet: #7c3aed;
+  --teal: #0d9488;
+  --pink: #db2777;
+
+  /* --- Radius: tight, consistent --- */
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 14px;
+
+  /* --- Elevation: barely-there. Depth comes from borders, not shadows. --- */
+  --sh-xs: 0 1px 2px rgba(16, 24, 40, 0.04);
+  --sh-sm: 0 1px 3px rgba(16, 24, 40, 0.06), 0 1px 2px rgba(16, 24, 40, 0.04);
+  --sh-md: 0 4px 12px rgba(16, 24, 40, 0.07), 0 2px 4px rgba(16, 24, 40, 0.04);
+  --sh-lg: 0 12px 32px rgba(16, 24, 40, 0.1), 0 4px 8px rgba(16, 24, 40, 0.04);
+
+  /* --- Motion: quick and unfussy --- */
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --duration-fast: 120ms;
+  --duration: 180ms;
 }
 
 @theme inline {
@@ -28,15 +69,32 @@
   --color-card-hover: var(--card-hover);
   --color-border: var(--border);
   --color-border-soft: var(--border-soft);
+  --color-border-strong: var(--border-strong);
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
   --color-muted-2: var(--muted-2);
   --color-accent: var(--accent);
   --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-fg: var(--primary-fg);
   --color-blue: var(--blue);
   --color-amber: var(--amber);
   --color-red: var(--red);
   --color-violet: var(--violet);
+  --color-teal: var(--teal);
+  --color-pink: var(--pink);
+
+  --radius-xs: var(--r-xs);
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-md);
+  --radius-lg: var(--r-lg);
+  --radius-xl: var(--r-xl);
+
+  --shadow-xs: var(--sh-xs);
+  --shadow-sm: var(--sh-sm);
+  --shadow-md: var(--sh-md);
+  --shadow-lg: var(--sh-lg);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -46,20 +104,48 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans), system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
+/* Numbers are the product — always tabular so columns align and digits don't
+   jitter as values tick. */
 .num {
   font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  letter-spacing: -0.01em;
+}
+
+/* Large display figures (hero metrics): tighter tracking reads as typeset. */
+.metric {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  font-weight: 600;
+}
+
+/* Section eyebrow labels */
+.eyebrow {
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted-2);
 }
 
 ::selection {
-  background: var(--accent-dim);
+  background: var(--primary-dim);
+}
+
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: var(--r-xs);
 }
 
 /* Subtle scrollbars */
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
+  scrollbar-color: var(--border-strong) transparent;
 }
 
 /* Scrollable nav pills: no scrollbar — its hit-area steals clicks from links.
@@ -71,6 +157,35 @@ body {
   display: none;
 }
 
+/* Radix-driven enter/exit, used by Dialog/Tooltip/Select */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes zoom-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+}
+[data-slot="dialog-overlay"][data-state="open"] {
+  animation: fade-in var(--duration) var(--ease);
+}
+[data-slot="dialog-content"][data-state="open"],
+[data-slot="tooltip-content"][data-state="delayed-open"] {
+  animation: zoom-in var(--duration) var(--ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 @media print {
   body {
     background: #fff;
@@ -80,7 +195,7 @@ body {
     padding: 0 !important;
   }
   section,
-  .rounded-2xl {
+  .rounded-xl {
     box-shadow: none !important;
     break-inside: avoid;
   }

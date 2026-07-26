@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { tooltipStyle } from "@/lib/chartTheme";
 import { formatMoney, monthLabel, perTickerStats, prettyTicker } from "@/lib/analytics";
 import type { DividendsPayload, OverviewPayload } from "@/lib/types";
 import { DEFAULT_SIM_SETTINGS, runSimulation, type SimHolding, type SimSettings } from "@/lib/simulator";
@@ -126,7 +127,7 @@ export default function SimulatorPage() {
   const cellInput = "num w-full rounded-lg border border-border bg-surface px-2 py-1.5 text-right text-sm outline-none focus:border-muted-2";
 
   return (
-    <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-8">
+    <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
       <header className="mb-8 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Scenario simulator</h1>
@@ -151,22 +152,22 @@ export default function SimulatorPage() {
         <>
           {/* Results */}
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-            <div className="rounded-2xl border border-border bg-card px-5 py-4 shadow-sm">
+            <div className="rounded-xl border border-border bg-card px-5 py-4 shadow-sm">
               <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-2">Monthly income{settings.tax.enabled ? " · net" : ""}</div>
               <div className="num mt-1.5 text-2xl font-semibold text-primary">{formatMoney(result.endMonthlyIncome, CUR, 0)}</div>
               <div className="num mt-1 text-xs text-muted">now {formatMoney(result.startMonthlyIncome, CUR, 0)} gross · in {settings.horizonYears} yrs</div>
             </div>
-            <div className="rounded-2xl border border-border bg-card px-5 py-4 shadow-sm">
+            <div className="rounded-xl border border-border bg-card px-5 py-4 shadow-sm">
               <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-2">Portfolio value</div>
               <div className="num mt-1.5 text-2xl font-semibold">{formatMoney(result.endValue, CUR, 0)}</div>
               <div className="num mt-1 text-xs text-muted">now {formatMoney(result.startValue, CUR, 0)}</div>
             </div>
-            <div className="rounded-2xl border border-border bg-card px-5 py-4 shadow-sm">
+            <div className="rounded-xl border border-border bg-card px-5 py-4 shadow-sm">
               <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-2">You deposit</div>
               <div className="num mt-1.5 text-2xl font-semibold">{formatMoney(result.totalDeposited, CUR, 0)}</div>
               <div className="num mt-1 text-xs text-muted">{formatMoney(totalDeposit, CUR, 0)}/mo over {settings.horizonYears} yrs</div>
             </div>
-            <div className="rounded-2xl border border-border bg-card px-5 py-4 shadow-sm">
+            <div className="rounded-xl border border-border bg-card px-5 py-4 shadow-sm">
               <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-2">Dividends collected{settings.tax.enabled ? " · net" : ""}</div>
               <div className="num mt-1.5 text-2xl font-semibold text-accent">{formatMoney(result.totalDividends, CUR, 0)}</div>
               <div className="num mt-1 text-xs text-muted">
@@ -177,7 +178,7 @@ export default function SimulatorPage() {
           </div>
 
           {/* Chart */}
-          <section className="mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <section className="mt-6 rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-sm font-semibold tracking-wide">Projection</h2>
               <div className="flex flex-wrap items-center gap-4">
@@ -222,7 +223,7 @@ export default function SimulatorPage() {
                   <YAxis yAxisId="income" tick={{ fill: "var(--primary)", fontSize: 11 }} axisLine={false} tickLine={false} width={56} tickFormatter={(v: number) => formatMoney(v, CUR, 0)} />
                   <YAxis yAxisId="value" orientation="right" tick={{ fill: "var(--muted-2)", fontSize: 11 }} axisLine={false} tickLine={false} width={64} tickFormatter={(v: number) => formatMoney(v, CUR, 0)} />
                   <Tooltip
-                    contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, color: "var(--foreground)", fontSize: 12 }}
+                    contentStyle={tooltipStyle}
                     labelFormatter={(d) => monthLabel(String(d))}
                     formatter={(v, name) => [formatMoney(Number(v), CUR, 0), String(name)]}
                   />
@@ -239,7 +240,7 @@ export default function SimulatorPage() {
           </section>
 
           {/* Editor */}
-          <section className="mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <section className="mt-6 rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="text-sm font-semibold tracking-wide">Scenario</h2>
@@ -338,7 +339,7 @@ export default function SimulatorPage() {
           </section>
 
           {/* Per-holding outcome */}
-          <section className="mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <section className="mt-6 rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5">
             <h2 className="mb-4 text-sm font-semibold tracking-wide">Where you end up · per holding</h2>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">

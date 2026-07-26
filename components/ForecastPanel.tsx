@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { tooltipStyle } from "@/lib/chartTheme";
 import type { ForecastPoint } from "@/lib/forecast";
 import { DEFAULT_SETTINGS, runForecast, type ForecastSettings } from "@/lib/forecast";
 import { DEFAULT_GERMAN_TAX } from "@/lib/tax";
@@ -139,11 +140,11 @@ export default function ForecastPanel({
               onChange={(e) => setNewTarget(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && addTarget()}
               onWheel={(e) => (e.target as HTMLInputElement).blur()}
-              className="num w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-muted-2"
+              className="num w-full rounded-md border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-muted-2"
             />
             <button
               onClick={addTarget}
-              className="rounded-xl border border-border px-3 py-2 text-xs font-medium text-muted transition-colors hover:bg-card-hover hover:text-foreground"
+              className="rounded-md border border-border px-3 py-2 text-xs font-medium text-muted transition-colors hover:bg-card-hover hover:text-foreground"
             >
               Add
             </button>
@@ -225,7 +226,7 @@ export default function ForecastPanel({
                 tickFormatter={(v: number) => formatMoney(v, currency, 0)}
               />
               <Tooltip
-                contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, color: "var(--foreground)", fontSize: 12 }}
+                contentStyle={tooltipStyle}
                 labelFormatter={(d) => monthLabel(String(d))}
                 formatter={(v, name) => [formatMoney(Number(v), currency, 0), String(name)]}
               />

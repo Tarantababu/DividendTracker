@@ -169,12 +169,12 @@ export default function DigestPage() {
   if (error && !data) {
     return (
       <main className="mx-auto w-full max-w-3xl flex-1 px-5 py-10">
-        <div className="rounded-2xl border border-border bg-card p-6 text-center">
+        <div className="rounded-xl border border-border bg-card p-6 text-center">
           <p className="text-sm text-red">{error}</p>
           <button
             onClick={() => load(true)}
             disabled={building}
-            className="mt-4 rounded-xl border border-border px-4 py-2 text-xs text-muted transition-colors hover:bg-card-hover hover:text-foreground disabled:opacity-50"
+            className="mt-4 rounded-md border border-border px-4 py-2 text-xs text-muted transition-colors hover:bg-card-hover hover:text-foreground disabled:opacity-50"
           >
             {building ? `Rebuilding… ${Math.round(progress * 100)}%` : "Rebuild"}
           </button>
@@ -224,7 +224,7 @@ export default function DigestPage() {
             onClick={() => load(true)}
             disabled={building}
             title="Fetches fresh market data and rewrites the digest"
-            className="rounded-xl border border-border px-3 py-1.5 text-xs text-muted transition-colors hover:bg-card-hover hover:text-foreground disabled:opacity-50"
+            className="rounded-md border border-border px-3 py-1.5 text-xs text-muted transition-colors hover:bg-card-hover hover:text-foreground disabled:opacity-50"
           >
             {building ? `Rebuilding… ${Math.round(progress * 100)}%` : "Rebuild"}
           </button>
@@ -238,7 +238,7 @@ export default function DigestPage() {
       )}
 
       {/* Headline take */}
-      <section className="mt-5 rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
+      <section className="mt-5 rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5">
         <p className="text-base font-semibold leading-snug">{data.headline}</p>
         {data.note && <p className="mt-2 text-xs text-red">{data.note}</p>}
         <div className="num mt-4 grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
@@ -272,7 +272,7 @@ export default function DigestPage() {
       </section>
 
       {/* Macro strip */}
-      <section className="mt-6 rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
+      <section className="mt-6 rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5">
         <h2 className="text-sm font-semibold tracking-wide">Markets today</h2>
         <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {data.macro.map((m) => (
@@ -314,7 +314,7 @@ export default function DigestPage() {
       {data.sections.length > 0 && (
         <div className="mt-6 grid gap-6">
           {data.sections.map((s) => (
-            <section key={s.heading} className="rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
+            <section key={s.heading} className="rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5">
               <h2 className="mb-3 text-sm font-semibold tracking-wide">{s.heading}</h2>
               <Body text={s.body} />
             </section>
@@ -324,7 +324,7 @@ export default function DigestPage() {
 
       {/* Daily macro lesson */}
       {data.education.length > 0 && (
-        <section className="mt-6 rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
+        <section className="mt-6 rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5">
           <h2 className="text-sm font-semibold tracking-wide">Learn today</h2>
           <p className="mb-4 mt-0.5 text-xs text-muted-2">Macro concepts today&apos;s market actually demonstrated — with further reading.</p>
           <div className="grid gap-4 md:grid-cols-2">
@@ -360,7 +360,7 @@ export default function DigestPage() {
         data.marketMovers?.usLosers?.length ||
         data.marketMovers?.euGainers?.length ||
         data.marketMovers?.euLosers?.length) > 0 && (
-        <section className="mt-6 rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
+        <section className="mt-6 rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5">
           <h2 className="text-sm font-semibold tracking-wide">Market movers</h2>
           <p className="mb-4 mt-0.5 text-xs text-muted-2">Biggest large-cap moves today across the US and Europe — market colour, not your holdings.</p>
           <div className="grid gap-x-6 gap-y-5 sm:grid-cols-2">
@@ -398,7 +398,7 @@ export default function DigestPage() {
 
       {/* Movers */}
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <section className="rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
+        <section className="rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5">
           <h2 className="mb-3 text-sm font-semibold tracking-wide text-accent">Top gainers today</h2>
           {data.gainers.length === 0 ? (
             <p className="text-xs text-muted-2">Nothing up today.</p>
@@ -410,7 +410,7 @@ export default function DigestPage() {
             </div>
           )}
         </section>
-        <section className="rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
+        <section className="rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5">
           <h2 className="mb-3 text-sm font-semibold tracking-wide text-red">Top losers today</h2>
           {data.losers.length === 0 ? (
             <p className="text-xs text-muted-2">Nothing down today.</p>
@@ -425,7 +425,7 @@ export default function DigestPage() {
       </div>
 
       {/* Sources */}
-      <section className="mt-6 rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
+      <section className="mt-6 rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5">
         <h2 className="mb-1 text-sm font-semibold tracking-wide">Sources &amp; further reading</h2>
         <p className="mb-3 text-xs text-muted-2">Every headline the digest was built from — click through to read the original.</p>
         <ul className="grid gap-1.5 sm:grid-cols-2">

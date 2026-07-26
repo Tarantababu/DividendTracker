@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Area, AreaChart, Line, ResponsiveContainer, Tooltip } from "recharts";
+import { tooltipStyle } from "@/lib/chartTheme";
 import { formatMoney } from "@/lib/analytics";
 import type { TickerDividendStats } from "@/lib/analytics";
 import type { DividendItem, Position } from "@/lib/types";
@@ -53,7 +54,7 @@ function MiniHistory({ series, color, currency }: { series: CatPoint[]; color: s
             </linearGradient>
           </defs>
           <Tooltip
-            contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 11 }}
+            contentStyle={tooltipStyle}
             labelFormatter={(d) => String(d)}
             formatter={(v, n) => [formatMoney(Number(v), currency, 0), n === "value" ? "Value" : n === "cost" ? "Invested" : "Incl. dividends"]}
           />
@@ -202,7 +203,7 @@ export default function CategoryBreakdown({ positions, divStats, dividends, curr
   if (stats.length === 0) return null;
 
   return (
-    <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+    <section className="rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5">
       <div className="mb-4">
         <h2 className="text-sm font-semibold tracking-wide">Category performance</h2>
         <p className="mt-0.5 text-xs text-muted-2">

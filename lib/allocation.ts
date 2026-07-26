@@ -7,6 +7,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Position } from "@/lib/types";
 import { prettyTicker } from "@/lib/analytics";
+import { CHART_SERIES } from "@/lib/chartTheme";
 
 export const ALLOCATION_KEY = "dividend-tracker-allocation-v1";
 const CHANGE_EVENT = "allocation-changed";
@@ -30,8 +31,10 @@ export interface AllocationState {
   deposit: number;
 }
 
-export const CATEGORY_COLORS = ["#6d4aff", "#38a6f8", "#34d399", "#f5a623", "#f472b6", "#22d3ee", "#a78bfa", "#60a5fa", "#8b5cf6", "#c4b5fd"];
-export const UNASSIGNED_COLOR = "#8a8fa3";
+// Single categorical palette for the whole app — same order as the chart theme so
+// a category keeps its colour whether it appears in a donut, a bar or a chip.
+export const CATEGORY_COLORS = [...CHART_SERIES];
+export const UNASSIGNED_COLOR = "var(--muted-2)";
 
 // Baked-in starter allocation so the tool is useful out of the box (no manual
 // setup). Category targetPct sums to 100; each category's member weightPct sums

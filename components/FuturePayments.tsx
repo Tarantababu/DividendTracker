@@ -1,6 +1,7 @@
 "use client";
 
 import { Bar, BarChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { tooltipStyle } from "@/lib/chartTheme";
 import type { FuturePayment } from "@/lib/analytics";
 import { formatMoney, prettyTicker } from "@/lib/analytics";
 
@@ -27,7 +28,7 @@ export default function FuturePayments({ data, currency }: { data: FuturePayment
             <YAxis hide />
             <Tooltip
               cursor={{ fill: "rgba(0,0,0,0.04)" }}
-              contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, color: "var(--foreground)", fontSize: 12 }}
+              contentStyle={tooltipStyle}
               formatter={(v) => [formatMoney(Number(v), currency), "Projected"]}
               labelFormatter={(label, payload) => {
                 const p = payload?.[0]?.payload as FuturePayment | undefined;

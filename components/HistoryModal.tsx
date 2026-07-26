@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Area, AreaChart, CartesianGrid, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { tooltipStyle } from "@/lib/chartTheme";
 import { formatMoney } from "@/lib/analytics";
 import type { PortfolioHistoryPayload } from "@/app/api/portfolio-history/route";
 
@@ -112,7 +113,7 @@ export default function HistoryModal({ currency }: { currency: string }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setTarget(null)}>
       <div
-        className="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-2xl border border-border bg-card p-5 shadow-xl"
+        className="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-xl border border-border bg-card p-5 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3">
@@ -150,7 +151,7 @@ export default function HistoryModal({ currency }: { currency: string }) {
             <button
               key={r.key}
               onClick={() => setRange(r.key)}
-              className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${range === r.key ? "bg-[var(--primary)] text-white" : "bg-surface text-muted hover:text-foreground"}`}
+              className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${range === r.key ? "bg-[var(--primary)] text-[var(--primary-fg)]" : "bg-surface text-muted hover:text-foreground"}`}
             >
               {r.key}
             </button>
@@ -175,7 +176,7 @@ export default function HistoryModal({ currency }: { currency: string }) {
                 <XAxis dataKey="date" tick={{ fontSize: 10, fill: "var(--muted-2)" }} minTickGap={40} tickFormatter={(d) => String(d).slice(5)} />
                 <YAxis tick={{ fontSize: 10, fill: "var(--muted-2)" }} width={44} tickFormatter={(v) => `${Math.round(Number(v) / 1000)}k`} />
                 <Tooltip
-                  contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, color: "var(--foreground)", fontSize: 12 }}
+                  contentStyle={tooltipStyle}
                   formatter={(v, n) => [formatMoney(Number(v), currency, 0), n === "value" ? "Value" : "Invested"]}
                 />
                 <Area type="monotone" dataKey="value" stroke={color} strokeWidth={2} fill="url(#histFill)" isAnimationActive={false} />

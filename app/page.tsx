@@ -67,7 +67,7 @@ type TabId = (typeof TABS)[number]["id"];
 
 function Section({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+    <section className="rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5">
       <div className="mb-4">
         <h2 className="text-sm font-semibold tracking-wide">{title}</h2>
         {sub && <p className="mt-0.5 text-xs text-muted-2">{sub}</p>}
@@ -99,7 +99,7 @@ function LoadingScreen({ progress }: { progress: number }) {
 function SetupScreen() {
   return (
     <main className="flex min-h-screen items-center justify-center p-6">
-      <div className="w-full max-w-lg rounded-2xl border border-border bg-card p-8">
+      <div className="w-full max-w-lg rounded-xl border border-border bg-card p-8">
         <h1 className="text-lg font-semibold">Connect your Trading212 account</h1>
         <p className="mt-2 text-sm leading-relaxed text-muted">
           Add your API credentials to <code className="rounded bg-surface px-1.5 py-0.5 text-xs">.env.local</code> in the project root, then restart{" "}
@@ -255,11 +255,11 @@ export default function Dashboard() {
   if (error || !overview || !dividends || !stats) {
     return (
       <main className="flex min-h-screen items-center justify-center p-6">
-        <div className="max-w-md rounded-2xl border border-border bg-card p-6 text-center">
+        <div className="max-w-md rounded-xl border border-border bg-card p-6 text-center">
           <p className="text-sm text-red">{error?.message ?? "Something went wrong."}</p>
           <button
             onClick={() => { setLoading(true); load(false); }}
-            className="mt-4 rounded-xl border border-border px-4 py-2 text-xs text-muted transition-colors hover:bg-card-hover hover:text-foreground"
+            className="mt-4 rounded-md border border-border px-4 py-2 text-xs text-muted transition-colors hover:bg-card-hover hover:text-foreground"
           >
             Retry
           </button>
@@ -281,7 +281,7 @@ export default function Dashboard() {
   const totalReturnPct = netInvested > 0 ? totalReturn / netInvested : null;
 
   return (
-    <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-8">
+    <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
       <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Portfolio</h1>
@@ -293,7 +293,7 @@ export default function Dashboard() {
         <button
           onClick={() => { setSyncing(true); load(true); }}
           disabled={syncing}
-          className="rounded-xl border border-border bg-card px-4 py-2 text-xs font-medium text-muted transition-colors hover:bg-card-hover hover:text-foreground disabled:opacity-50"
+          className="rounded-md border border-border bg-card px-4 py-2 text-xs font-medium text-muted transition-colors hover:bg-card-hover hover:text-foreground disabled:opacity-50"
         >
           {syncing ? "Syncing…" : "Refresh"}
         </button>
@@ -330,15 +330,13 @@ export default function Dashboard() {
       </div>
 
       {/* Tab bar — sticky right under the app header */}
-      <div className="sticky top-13 z-30 -mx-5 mt-6 bg-[color-mix(in_srgb,var(--background)_88%,transparent)] px-5 py-2 backdrop-blur-md">
-        <div className="no-scrollbar flex w-fit max-w-full items-center gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1 shadow-sm">
+      <div className="sticky top-12 z-30 -mx-4 mt-6 bg-[color-mix(in_srgb,var(--background)_88%,transparent)] px-4 py-2 backdrop-blur-md sm:-mx-6 sm:px-6">
+        <div className="no-scrollbar flex w-fit max-w-full items-center gap-0.5 overflow-x-auto rounded-lg border border-border bg-surface p-0.5">
           {TABS.map((t) => (
             <button
               key={t.id}
               onClick={() => switchTab(t.id)}
-              className={`whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs font-medium transition-colors ${
-                tab === t.id ? "bg-[var(--primary)] text-white" : "text-muted hover:bg-card-hover hover:text-foreground"
-              }`}
+              className={`whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${tab === t.id ? "bg-card text-foreground shadow-xs" : "text-muted hover:text-foreground"}`}
             >
               {t.label}
             </button>

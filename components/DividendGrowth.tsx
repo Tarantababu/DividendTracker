@@ -1,6 +1,7 @@
 "use client";
 
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { tooltipStyle } from "@/lib/chartTheme";
 import type { YearlyByMonth } from "@/lib/analytics";
 import { formatMoney } from "@/lib/analytics";
 
@@ -16,7 +17,7 @@ export default function DividendGrowth({ data, years, currency }: { data: Yearly
           <YAxis tick={{ fill: "var(--muted-2)", fontSize: 11 }} axisLine={false} tickLine={false} width={48} tickFormatter={(v: number) => formatMoney(v, currency, 0)} />
           <Tooltip
             cursor={{ fill: "rgba(0,0,0,0.04)" }}
-            contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, color: "var(--foreground)", fontSize: 12 }}
+            contentStyle={tooltipStyle}
             formatter={(v, name) => [formatMoney(Number(v), currency), String(name)]}
           />
           <Legend wrapperStyle={{ fontSize: 12 }} iconType="circle" iconSize={8} />

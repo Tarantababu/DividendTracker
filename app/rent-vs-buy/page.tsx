@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { tooltipStyle } from "@/lib/chartTheme";
 import { formatMoney } from "@/lib/analytics";
 import { DEFAULT_RVB, runRentVsBuy, type RentVsBuySettings } from "@/lib/rentvsbuy";
 import { DEFAULT_GERMAN_TAX } from "@/lib/tax";
@@ -82,7 +83,7 @@ export default function RentVsBuyPage() {
   const monthlyDiff = ownerCostM1 - s.monthlyRent;
 
   return (
-    <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-8">
+    <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
       <header className="mb-8 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Rent vs Buy</h1>
@@ -94,7 +95,7 @@ export default function RentVsBuyPage() {
 
       <div className="grid gap-6 lg:grid-cols-[340px_1fr]">
         {/* Inputs */}
-        <section className="space-y-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <section className="space-y-6 rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5">
           <Group title="The home">
             <Field label="Price" value={s.homePrice} onChange={(v) => set({ homePrice: v })} step={10000} suffix={CUR} />
             <Field label="Appreciation / yr" value={s.homeAppreciationPct} onChange={(v) => set({ homeAppreciationPct: v })} step={0.5} suffix="%" />
@@ -125,7 +126,7 @@ export default function RentVsBuyPage() {
 
         {/* Results */}
         <div className="space-y-6">
-          <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <section className="rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5">
             <p className="text-sm leading-relaxed text-muted">
               After <span className="num font-semibold text-foreground">{s.horizonYears} years</span>,{" "}
               <span className={`text-xl font-semibold ${buyWins ? "text-accent" : "text-blue"}`}>{buyWins ? "buying" : "renting + investing"}</span>{" "}
@@ -174,7 +175,7 @@ export default function RentVsBuyPage() {
             </div>
           </section>
 
-          <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <section className="rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5">
             <h2 className="mb-4 text-sm font-semibold tracking-wide">Net worth over time</h2>
             <div className="h-80 w-full">
               <ResponsiveContainer width="100%" height="100%">
@@ -195,7 +196,7 @@ export default function RentVsBuyPage() {
                     tickFormatter={(v: number) => formatMoney(v, CUR, 0)}
                   />
                   <Tooltip
-                    contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, color: "var(--foreground)", fontSize: 12 }}
+                    contentStyle={tooltipStyle}
                     formatter={(v, name) => [formatMoney(Number(v), CUR, 0), String(name)]}
                   />
                   <Area name="Buying (equity + surplus invested)" type="monotone" dataKey="buyerNetWorth" stroke="var(--accent)" strokeWidth={2} fill="url(#buyGrad)" />
@@ -208,7 +209,7 @@ export default function RentVsBuyPage() {
             </p>
           </section>
 
-          <section className="rounded-2xl border border-border bg-card p-5 text-xs leading-relaxed text-muted-2 shadow-sm">
+          <section className="rounded-xl border border-border bg-card p-5 text-xs leading-relaxed text-muted-2 shadow-sm">
             <strong className="text-muted">How it works:</strong> both paths start with the same cash ({formatMoney(r.upfrontCash, CUR, 0)} — down payment plus buying
             costs). The buyer pays mortgage, property tax and maintenance but no rent; the renter pays only rent. Each month, whoever pays less for housing invests
             the difference at {s.investmentReturnPct}%/yr — e.g. mortgage {formatMoney(ownerCostM1, CUR, 0)} vs rent {formatMoney(s.monthlyRent, CUR, 0)} means the

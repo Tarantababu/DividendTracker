@@ -61,7 +61,7 @@ export default function TaxReportPage() {
   const e = report?.estimate;
 
   return (
-    <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-8">
+    <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
       <header className="mb-8 flex flex-wrap items-center justify-between gap-3 print:hidden">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">German tax report</h1>
@@ -90,7 +90,7 @@ export default function TaxReportPage() {
                   key={y}
                   onClick={() => setYear(y)}
                   className={`rounded-lg px-3.5 py-1.5 text-xs font-medium transition-colors ${
-                    y === year ? "bg-[var(--primary)] text-white" : "text-muted hover:bg-card-hover hover:text-foreground"
+                    y === year ? "bg-[var(--primary)] text-[var(--primary-fg)]" : "text-muted hover:bg-card-hover hover:text-foreground"
                   }`}
                 >
                   {y}
@@ -98,7 +98,7 @@ export default function TaxReportPage() {
               ))}
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={downloadCsv} className="rounded-xl border border-border bg-card px-4 py-2 text-xs font-medium text-muted transition-colors hover:bg-card-hover hover:text-foreground">
+              <button onClick={downloadCsv} className="rounded-md border border-border bg-card px-4 py-2 text-xs font-medium text-muted transition-colors hover:bg-card-hover hover:text-foreground">
                 Download CSV
               </button>
               <button onClick={() => window.print()} className="rounded-xl bg-[var(--primary)] px-4 py-2 text-xs font-medium text-white transition-opacity hover:opacity-90">
@@ -115,21 +115,21 @@ export default function TaxReportPage() {
 
           {/* Overview */}
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-            <div className="rounded-2xl border border-border bg-card px-5 py-4 shadow-sm print:shadow-none">
+            <div className="rounded-xl border border-border bg-card px-5 py-4 shadow-sm print:shadow-none">
               <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-2">Dividends received {report.year}</div>
               <div className="num mt-1.5 text-2xl font-semibold text-primary">{formatMoney(report.totalEur, CUR)}</div>
             </div>
-            <div className="rounded-2xl border border-border bg-card px-5 py-4 shadow-sm print:shadow-none">
+            <div className="rounded-xl border border-border bg-card px-5 py-4 shadow-sm print:shadow-none">
               <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-2">Payments</div>
               <div className="num mt-1.5 text-2xl font-semibold">{report.paymentCount}</div>
               <div className="num mt-1 text-xs text-muted">from {report.payerCount} securities</div>
             </div>
-            <div className="rounded-2xl border border-border bg-card px-5 py-4 shadow-sm print:shadow-none">
+            <div className="rounded-xl border border-border bg-card px-5 py-4 shadow-sm print:shadow-none">
               <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-2">Estimated tax due</div>
               <div className="num mt-1.5 text-2xl font-semibold text-red">{e && tax.enabled ? formatMoney(e.estimatedTax, CUR) : "—"}</div>
               {tax.enabled && <div className="num mt-1 text-xs text-muted">at {e?.taxRatePct.toFixed(3)}% on the taxable base</div>}
             </div>
-            <div className="rounded-2xl border border-border bg-card px-5 py-4 shadow-sm print:shadow-none">
+            <div className="rounded-xl border border-border bg-card px-5 py-4 shadow-sm print:shadow-none">
               <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-2">Net after tax</div>
               <div className="num mt-1.5 text-2xl font-semibold text-accent">{e && tax.enabled ? formatMoney(e.netAfterTax, CUR) : formatMoney(report.totalEur, CUR)}</div>
             </div>
@@ -137,7 +137,7 @@ export default function TaxReportPage() {
 
           {/* Tax computation */}
           <section className="mt-6 grid gap-6 lg:grid-cols-2">
-            <div className="rounded-2xl border border-border bg-card p-5 shadow-sm print:shadow-none">
+            <div className="rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5 print:shadow-none">
               <h2 className="mb-1 text-sm font-semibold tracking-wide">Abgeltungsteuer computation</h2>
               <p className="mb-4 text-xs text-muted-2">Assumes no tax was withheld at source on these amounts — verify against your broker statement</p>
               <div className="mb-4 print:hidden">
@@ -170,7 +170,7 @@ export default function TaxReportPage() {
               )}
             </div>
 
-            <div className="rounded-2xl border border-border bg-card p-5 shadow-sm print:shadow-none">
+            <div className="rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5 print:shadow-none">
               <h2 className="mb-4 text-sm font-semibold tracking-wide">By month</h2>
               <table className="w-full text-sm">
                 <tbody>
@@ -190,7 +190,7 @@ export default function TaxReportPage() {
           </section>
 
           {/* Per holding */}
-          <section className="mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm print:shadow-none">
+          <section className="mt-6 rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5 print:shadow-none">
             <h2 className="mb-4 text-sm font-semibold tracking-wide">By security · {report.year}</h2>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -220,7 +220,7 @@ export default function TaxReportPage() {
           </section>
 
           {/* All transactions */}
-          <section className="mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm print:shadow-none">
+          <section className="mt-6 rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5 print:shadow-none">
             <h2 className="mb-4 text-sm font-semibold tracking-wide">All dividend transactions · {report.year}</h2>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -261,7 +261,7 @@ export default function TaxReportPage() {
             </div>
           </section>
 
-          <footer className="mt-8 rounded-2xl border border-border bg-card p-5 text-xs leading-relaxed text-muted-2 shadow-sm print:shadow-none">
+          <footer className="mt-8 rounded-xl border border-border bg-card p-5 text-xs leading-relaxed text-muted-2 shadow-sm print:shadow-none">
             <strong className="text-muted">Notes for your declaration:</strong> amounts are the EUR sums credited by Trading212 (foreign withholding tax, e.g. 15% US,
             may already have been deducted at source — check your Trading212 annual statement for the gross figures and creditable Quellensteuer, Anlage KAP lines 40/41).
             Realised gains and losses from sales are not included here. Fund distributions qualify for Teilfreistellung only if the fund holds ≥51% equities.

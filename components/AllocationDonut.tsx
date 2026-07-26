@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import { tooltipStyle, CHART_SERIES } from "@/lib/chartTheme";
 import type { Position } from "@/lib/types";
 import { formatMoney, prettyTicker } from "@/lib/analytics";
 import { categorySlices, useLiveCategories, usePies, type PieLike } from "@/lib/allocation";
 
-const COLORS = ["#6d4aff", "#8b5cf6", "#38a6f8", "#22d3ee", "#34d399", "#a78bfa", "#f5a623", "#f472b6", "#60a5fa", "#c4b5fd"];
+const COLORS = CHART_SERIES;
 
 interface Slice {
   name: string;
@@ -58,7 +59,7 @@ export default function AllocationDonut({ positions, currency, pies: piesProp }:
             <button
               key={m}
               onClick={() => setMode(m)}
-              className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${mode === m ? "bg-[var(--primary)] text-white" : "text-muted hover:text-foreground"}`}
+              className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${mode === m ? "bg-[var(--primary)] text-[var(--primary-fg)]" : "text-muted hover:text-foreground"}`}
             >
               {m === "category" ? "By category" : "By holding"}
             </button>
@@ -75,7 +76,7 @@ export default function AllocationDonut({ positions, currency, pies: piesProp }:
                 ))}
               </Pie>
               <Tooltip
-                contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, color: "var(--foreground)", fontSize: 12 }}
+                contentStyle={tooltipStyle}
                 formatter={(v, name, entry) => [
                   `${formatMoney(Number(v), currency)} · ${((Number(v) / total) * 100).toFixed(1)}%`,
                   (entry?.payload as { fullName?: string })?.fullName ?? name,

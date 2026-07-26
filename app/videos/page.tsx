@@ -112,19 +112,19 @@ export default function VideosPage() {
   };
 
   return (
-    <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-8">
+    <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
       <h1 className="text-2xl font-bold tracking-tight">Episodes</h1>
       <p className="mt-1 text-sm text-muted">
         Weekly FIRE-journey videos generated from this tool — script by Claude, voiced with Dia, rendered, ready for YouTube review.
       </p>
 
       {/* One-click generation. Runs the full pipeline locally (needs the dev server). */}
-      <section className="mt-5 rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <section className="mt-5 rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
           <button
             onClick={startGenerate}
             disabled={!!gen?.running}
-            className="rounded-xl bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+            className="rounded-md bg-[var(--primary)] px-4 py-2 text-sm font-medium text-[var(--primary-fg)] shadow-xs transition-colors hover:bg-[var(--primary-hover)] disabled:opacity-50"
           >
             {gen?.running ? "Generating…" : "✨ Generate this week's episode"}
           </button>
@@ -146,7 +146,7 @@ export default function VideosPage() {
                 return (
                   <span
                     key={s}
-                    className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${active ? "bg-[var(--primary)] text-white" : done ? "bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] text-accent" : "bg-surface text-muted-2"}`}
+                    className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${active ? "bg-[var(--primary)] text-[var(--primary-fg)]" : done ? "bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] text-accent" : "bg-surface text-muted-2"}`}
                   >
                     {active ? "▸ " : done ? "✓ " : ""}
                     {s}
@@ -165,7 +165,7 @@ export default function VideosPage() {
       {!episodes && <div className="mt-8 flex h-32 items-center justify-center text-sm text-muted-2">Loading episodes…</div>}
 
       {episodes && episodes.length === 0 && (
-        <div className="mt-6 rounded-2xl border border-border bg-card p-8 text-center text-sm text-muted">
+        <div className="mt-6 rounded-xl border border-border bg-card p-8 text-center text-sm text-muted">
           No episodes yet. Generate the first one:
           <pre className="mx-auto mt-3 w-fit rounded-lg bg-surface px-4 py-2 text-left text-xs">cd video && npm run episode</pre>
         </div>
@@ -173,7 +173,7 @@ export default function VideosPage() {
 
       <div className="mt-6 grid gap-6">
         {episodes?.map((ep) => (
-          <section key={ep.week} className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+          <section key={ep.week} className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
             <div className="grid gap-0 lg:grid-cols-[2fr_1fr]">
               <div className="bg-black">
                 {ep.hasVideo ? (
@@ -209,7 +209,7 @@ export default function VideosPage() {
                 )}
                 <div className="mt-auto flex flex-wrap items-center gap-3 pt-4">
                   {ep.studioUrl ? (
-                    <a href={ep.studioUrl} target="_blank" rel="noopener noreferrer" className="rounded-xl bg-[var(--primary)] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90">
+                    <a href={ep.studioUrl} target="_blank" rel="noopener noreferrer" className="rounded-md bg-[var(--primary)] px-3 py-1.5 text-xs font-medium text-[var(--primary-fg)] shadow-xs transition-colors hover:bg-[var(--primary-hover)]">
                       Review in YouTube Studio
                     </a>
                   ) : ep.hasVideo ? (

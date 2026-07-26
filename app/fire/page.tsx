@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Area, CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { tooltipStyle } from "@/lib/chartTheme";
 import { formatMoney } from "@/lib/analytics";
 import { FIRE_TYPES, fireTarget, projectFire, type FireProjection, type FireType } from "@/lib/fire";
 import type { FirePayload } from "@/app/api/fire/route";
@@ -128,14 +129,14 @@ export default function FirePage() {
 
   if (error) {
     return (
-      <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-8">
-        <div className="rounded-2xl border border-border bg-card p-6 text-sm text-red">{error}</div>
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
+        <div className="rounded-xl border border-border bg-card p-6 text-sm text-red">{error}</div>
       </main>
     );
   }
 
   return (
-    <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-8">
+    <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
       <h1 className="text-2xl font-bold tracking-tight">FIRE progress</h1>
       <p className="mt-1 text-sm text-muted">
         Financial independence tracker — real deposits, real returns, projected forward
@@ -153,7 +154,7 @@ export default function FirePage() {
                 key={t.key}
                 onClick={() => setType(t.key)}
                 className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-                  settings.fireType === t.key ? "bg-[var(--primary)] text-white" : "border border-border bg-card text-muted hover:text-foreground"
+                  settings.fireType === t.key ? "bg-[var(--primary)] text-[var(--primary-fg)]" : "border border-border bg-card text-muted hover:text-foreground"
                 }`}
               >
                 {t.label}
@@ -226,7 +227,7 @@ export default function FirePage() {
           </div>
 
           {/* Progress bar */}
-          <div className="mt-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <div className="mt-4 rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5">
             <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
               <span className="font-semibold">
                 {yearsToTarget === null && `${typeConfig.label} not reachable within 60 years on current settings`}
@@ -258,7 +259,7 @@ export default function FirePage() {
           </div>
 
           {/* All FIRE types compared */}
-          <div className="mt-4 overflow-x-auto rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <div className="mt-4 overflow-x-auto rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5">
             <h2 className="text-sm font-semibold tracking-wide">FIRE types compared</h2>
             <table className="mt-3 w-full text-sm">
               <thead>
@@ -295,7 +296,7 @@ export default function FirePage() {
           </div>
 
           {/* Assumptions */}
-          <div className="mt-4 grid gap-3 rounded-2xl border border-border bg-card p-5 shadow-sm sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-4 grid gap-3 rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5 sm:grid-cols-2 lg:grid-cols-4">
             <label className="block text-xs">
               <span className="font-medium text-muted">Monthly expenses ({cur})</span>
               <input
@@ -363,7 +364,7 @@ export default function FirePage() {
           </div>
 
           {/* Projection chart */}
-          <section className="mt-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <section className="mt-4 rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5">
             <h2 className="text-sm font-semibold tracking-wide">Path to {typeConfig.label}</h2>
             <p className="mt-0.5 text-xs text-muted-2">
               {effReturn.toFixed(1)}%/yr return · {formatMoney(effContribution, cur, 0)}/mo contributions · nominal, before tax
@@ -387,7 +388,7 @@ export default function FirePage() {
                     tickLine={false}
                   />
                   <Tooltip
-                    contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, color: "var(--foreground)", fontSize: 12 }}
+                    contentStyle={tooltipStyle}
                     formatter={(v, name) => [formatMoney(Number(v), cur, 0), name === "value" ? "Portfolio" : "Contributed (future)"]}
                   />
                   <ReferenceLine

@@ -218,7 +218,7 @@ export default function DailyStatus({ dividends, currency }: { dividends: Divide
 
   if (error) {
     return (
-      <section className="rounded-2xl border border-border bg-card p-5 text-sm text-muted shadow-sm">
+      <section className="rounded-xl border border-border bg-card p-5 text-sm text-muted shadow-sm">
         Daily status unavailable — price history could not be loaded right now.
       </section>
     );
@@ -229,7 +229,7 @@ export default function DailyStatus({ dividends, currency }: { dividends: Divide
   const losers = [...(data?.today.movers ?? [])].reverse().filter((m) => m.dayChange < -0.005).slice(0, 5);
 
   return (
-    <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+    <section className="rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <h2 className="text-sm font-semibold tracking-wide">Today &amp; portfolio history</h2>
@@ -257,7 +257,7 @@ export default function DailyStatus({ dividends, currency }: { dividends: Divide
                 <button
                   key={r.label}
                   onClick={() => setRange(r.label)}
-                  className={`rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors ${range === r.label ? "bg-[var(--primary)] text-white" : "text-muted hover:text-foreground"}`}
+                  className={`rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors ${range === r.label ? "bg-[var(--primary)] text-[var(--primary-fg)]" : "text-muted hover:text-foreground"}`}
                 >
                   {r.label}
                 </button>

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { tooltipStyle } from "@/lib/chartTheme";
 import { formatMoney } from "@/lib/analytics";
 import { applyOverrides, summarize, CATEGORY_RULES, type Txn } from "@/lib/budget";
 import type { BankStatus } from "@/app/api/bank/status/route";
@@ -143,7 +144,7 @@ export default function BudgetPage() {
   const cur = summary?.currency ?? "EUR";
 
   return (
-    <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-8">
+    <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
       <h1 className="text-2xl font-bold tracking-tight">Budget</h1>
       <p className="mt-1 text-sm text-muted">
         Income, spending and savings rate from your N26 account — import a CSV export (no signup), or connect automatically over PSD2 via GoCardless.
@@ -154,7 +155,7 @@ export default function BudgetPage() {
       {/* Not configured — CSV import (primary) + GoCardless (secondary) */}
       {!loading && status && !status.configured && (
         <div className="mt-6 space-y-4">
-          <div className="rounded-2xl border border-[color-mix(in_srgb,var(--primary)_35%,var(--border))] bg-[color-mix(in_srgb,var(--primary)_5%,var(--card))] p-6 text-sm">
+          <div className="rounded-xl border border-[color-mix(in_srgb,var(--primary)_35%,var(--border))] bg-[color-mix(in_srgb,var(--primary)_5%,var(--card))] p-6 text-sm">
             <h2 className="font-semibold">Import an N26 CSV — works right now</h2>
             <p className="mt-2 text-muted">
               No signup, no credentials, nothing leaves your machine. In the N26 app or web banking open{" "}
@@ -169,7 +170,7 @@ export default function BudgetPage() {
             {error && <p className="mt-3 text-xs text-red">{error}</p>}
           </div>
 
-          <details className="rounded-2xl border border-border bg-card p-6 text-sm">
+          <details className="rounded-xl border border-border bg-card p-6 text-sm">
             <summary className="cursor-pointer font-semibold">Prefer automatic sync? Connect via GoCardless (PSD2)</summary>
             <p className="mt-2 text-muted">
               The sanctioned live connection — a licensed PSD2 provider that never sees your N26 password (you log in on N26&apos;s own page).
@@ -192,7 +193,7 @@ export default function BudgetPage() {
 
       {/* Configured but not linked — connect button */}
       {!loading && status?.configured && !status.linked && (
-        <div className="mt-6 rounded-2xl border border-border bg-card p-6">
+        <div className="mt-6 rounded-xl border border-border bg-card p-6">
           <h2 className="text-sm font-semibold">{status.pending ? "Finish connecting N26" : "Connect your N26 account"}</h2>
           <p className="mt-1.5 text-sm text-muted">
             {status.pending
@@ -204,7 +205,7 @@ export default function BudgetPage() {
               {busy ? "Starting…" : status.pending ? "Re-open N26 login" : "Connect N26"}
             </button>
             {status.pending && (
-              <button onClick={disconnect} disabled={busy} className="rounded-xl border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-card-hover disabled:opacity-50">
+              <button onClick={disconnect} disabled={busy} className="rounded-md border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-card-hover disabled:opacity-50">
                 Start over
               </button>
             )}
@@ -227,15 +228,15 @@ export default function BudgetPage() {
             )}
             <div className="ml-auto flex gap-2">
               {status.source === "csv" ? (
-                <CsvButton onFile={importCsv} className="cursor-pointer rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-medium hover:bg-card-hover">
+                <CsvButton onFile={importCsv} className="cursor-pointer rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium hover:bg-card-hover">
                   {busy ? "Importing…" : "Import new CSV"}
                 </CsvButton>
               ) : (
-                <button onClick={forceSync} disabled={busy} className="rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-medium hover:bg-card-hover disabled:opacity-50">
+                <button onClick={forceSync} disabled={busy} className="rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium hover:bg-card-hover disabled:opacity-50">
                   {busy ? "Syncing…" : "Sync now"}
                 </button>
               )}
-              <button onClick={disconnect} disabled={busy} className="rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted hover:text-red disabled:opacity-50">
+              <button onClick={disconnect} disabled={busy} className="rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted hover:text-red disabled:opacity-50">
                 {status.source === "csv" ? "Clear" : "Disconnect"}
               </button>
             </div>
@@ -254,7 +255,7 @@ export default function BudgetPage() {
               </div>
 
               {/* Monthly income vs spend */}
-              <section className="mt-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
+              <section className="mt-4 rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5">
                 <h2 className="text-sm font-semibold tracking-wide">Monthly cash flow</h2>
                 <div className="mt-3 h-64">
                   <ResponsiveContainer width="100%" height="100%">
@@ -264,7 +265,7 @@ export default function BudgetPage() {
                       <YAxis yAxisId="l" tick={{ fill: "var(--muted-2)", fontSize: 11 }} tickFormatter={(v: number) => formatMoney(v, cur, 0)} width={64} axisLine={false} tickLine={false} />
                       <YAxis yAxisId="r" orientation="right" domain={[-0.5, 1]} tick={{ fill: "var(--muted-2)", fontSize: 11 }} tickFormatter={(v: number) => `${(v * 100).toFixed(0)}%`} width={40} axisLine={false} tickLine={false} />
                       <Tooltip
-                        contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, fontSize: 12 }}
+                        contentStyle={tooltipStyle}
                         formatter={(v, n) => (n === "savingsRate" ? [`${(Number(v) * 100).toFixed(0)}%`, "Savings rate"] : [formatMoney(Number(v), cur, 0), n === "income" ? "Income" : "Spending"])}
                       />
                       <Bar yAxisId="l" dataKey="income" fill="var(--accent)" radius={[3, 3, 0, 0]} maxBarSize={22} />
@@ -277,7 +278,7 @@ export default function BudgetPage() {
 
               {/* Category breakdown + recent transactions */}
               <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                <section className="rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5">
                   <h2 className="text-sm font-semibold tracking-wide">Where it goes</h2>
                   <p className="mt-0.5 text-xs text-muted-2">Spending by category, trailing 3 months</p>
                   <div className="mt-3 space-y-2">
@@ -297,7 +298,7 @@ export default function BudgetPage() {
                   </div>
                 </section>
 
-                <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                <section className="rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5">
                   <h2 className="text-sm font-semibold tracking-wide">Recent transactions</h2>
                   <p className="mt-0.5 text-xs text-muted-2">Change a category to reclassify every transaction from that merchant</p>
                   <ul className="mt-3 max-h-80 space-y-1.5 overflow-y-auto">

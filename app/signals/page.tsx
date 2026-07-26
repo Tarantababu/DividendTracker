@@ -438,7 +438,7 @@ export default function SignalsPage() {
   const etfCount = Object.values(funds).filter((f) => f.isEtf).length;
 
   return (
-    <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-8">
+    <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
       <header className="mb-6">
         <h1 className="text-xl font-semibold tracking-tight">Signals</h1>
         <p className="mt-0.5 text-xs text-muted-2">
@@ -456,7 +456,7 @@ export default function SignalsPage() {
             value={query}
             onChange={(e) => runSearch(e.target.value)}
             placeholder="Add stock — name or ticker (US & EU)"
-            className="w-full rounded-xl border border-border bg-card px-3.5 py-2 text-sm outline-none placeholder:text-muted-2 focus:border-[var(--primary)]"
+            className="w-full rounded-md border border-border bg-card px-3.5 py-2 text-sm outline-none placeholder:text-muted-2 focus:border-[var(--primary)]"
           />
           {(results.length > 0 || searching) && query.trim().length >= 2 && (
             <div className="absolute top-full z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-xl border border-border bg-card shadow-lg">
@@ -479,7 +479,7 @@ export default function SignalsPage() {
         <button
           onClick={refresh}
           disabled={refreshing || loading}
-          className="rounded-xl border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-card-hover disabled:opacity-50"
+          className="rounded-md border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-card-hover disabled:opacity-50"
         >
           {refreshing ? "Refreshing…" : "Refresh prices"}
         </button>
@@ -487,7 +487,7 @@ export default function SignalsPage() {
 
       {/* Triggered summary */}
       {triggered.length > 0 && (
-        <div className="mb-6 rounded-2xl border border-[color-mix(in_srgb,var(--primary)_35%,var(--border))] bg-[color-mix(in_srgb,var(--primary)_6%,var(--card))] p-4">
+        <div className="mb-6 rounded-xl border border-[color-mix(in_srgb,var(--primary)_35%,var(--border))] bg-[color-mix(in_srgb,var(--primary)_6%,var(--card))] p-4">
           <div className="text-xs font-semibold uppercase tracking-wide text-primary">Price targets hit</div>
           <div className="mt-2 flex flex-wrap gap-2">
             {triggered.map(({ item, quote, signal }) => (
@@ -501,7 +501,7 @@ export default function SignalsPage() {
 
       {/* True look-through allocation: individual stocks across the whole portfolio */}
       {lookthrough && lookthrough.stocks.length > 0 && (
-        <div className="mb-6 rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <div className="mb-6 rounded-xl border border-border bg-card p-4 shadow-sm">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <div className="text-xs font-semibold uppercase tracking-wide text-muted-2">Look-through stock allocation</div>
             <div className="text-[11px] text-muted-2">
@@ -573,7 +573,7 @@ export default function SignalsPage() {
       )}
 
       {!loading && rows.length === 0 && (
-        <div className="rounded-2xl border border-border bg-card p-8 text-center text-sm text-muted">
+        <div className="rounded-xl border border-border bg-card p-8 text-center text-sm text-muted">
           No stocks yet — search above to add your first one.
         </div>
       )}
@@ -586,7 +586,7 @@ export default function SignalsPage() {
           const etf = isEtfLike(fund);
           const flags = fund ? fundFlags(fund) : [];
           return (
-            <section key={item.symbol} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+            <section key={item.symbol} className="rounded-xl border border-border bg-card p-4 shadow-sm">
               <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">

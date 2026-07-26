@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import { tooltipStyle } from "@/lib/chartTheme";
 import type { TickerDividendStats } from "@/lib/analytics";
 import { formatMoney, prettyTicker } from "@/lib/analytics";
 import { tickerCategoryIndex, UNASSIGNED_COLOR, useAllocation, CATEGORY_COLORS } from "@/lib/allocation";
@@ -49,7 +50,7 @@ export default function IncomeDiversification({ divStats, currency }: { divStats
             <button
               key={m}
               onClick={() => setMode(m)}
-              className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${mode === m ? "bg-[var(--primary)] text-white" : "text-muted hover:text-foreground"}`}
+              className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${mode === m ? "bg-[var(--primary)] text-[var(--primary-fg)]" : "text-muted hover:text-foreground"}`}
             >
               {m === "category" ? "By category" : "By holding"}
             </button>
@@ -66,7 +67,7 @@ export default function IncomeDiversification({ divStats, currency }: { divStats
               ))}
             </Pie>
             <Tooltip
-              contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, color: "var(--foreground)", fontSize: 12 }}
+              contentStyle={tooltipStyle}
               formatter={(v, name, entry) => [
                 `${formatMoney(Number(v), currency)} · ${((Number(v) / total) * 100).toFixed(1)}%`,
                 (entry?.payload as { fullName?: string })?.fullName ?? name,

@@ -220,9 +220,9 @@ export default function AllocationPlanner({ positions, currency, pies: piesProp 
             onChange={(e) => setNewName(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && addCategory()}
             placeholder="New category — e.g. Dividend ETFs, Growth, REITs"
-            className="w-full max-w-xs rounded-xl border border-border bg-surface px-3 py-2 text-sm outline-none placeholder:text-muted-2 focus:border-[var(--primary)]"
+            className="w-full max-w-xs rounded-md border border-border bg-surface px-3 py-2 text-sm outline-none placeholder:text-muted-2 focus:border-[var(--primary)]"
           />
-          <button onClick={addCategory} className="rounded-xl border border-border bg-surface px-3.5 py-2 text-sm font-medium hover:bg-card-hover">
+          <button onClick={addCategory} className="rounded-md border border-border bg-surface px-3.5 py-2 text-sm font-medium hover:bg-card-hover">
             Add category
           </button>
           <span className={`num ml-auto text-xs ${Math.round(pctSum) === 100 ? "text-accent" : "text-red"}`}>
@@ -256,7 +256,7 @@ export default function AllocationPlanner({ positions, currency, pies: piesProp 
                       step="any"
                       value={c.targetPct}
                       onChange={(e) => patchCategory(c.id, { targetPct: Number(e.target.value) })}
-                      className="w-14 rounded-lg border border-border bg-card px-1.5 py-1 text-right outline-none focus:border-[var(--primary)]"
+                      className="w-14 rounded-md border border-border bg-card px-1.5 py-1 text-right outline-none transition-colors focus:border-[var(--primary)]"
                     />
                     %
                   </label>

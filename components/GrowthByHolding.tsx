@@ -1,6 +1,7 @@
 "use client";
 
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { tooltipStyle } from "@/lib/chartTheme";
 import type { HoldingGrowth } from "@/lib/analytics";
 import { formatPct, prettyTicker } from "@/lib/analytics";
 
@@ -29,7 +30,7 @@ export default function GrowthByHolding({ data }: { data: HoldingGrowth[] }) {
           <YAxis tick={{ fill: "var(--muted-2)", fontSize: 11 }} axisLine={false} tickLine={false} width={44} tickFormatter={(v: number) => `${v.toFixed(0)}%`} />
           <Tooltip
             cursor={{ fill: "rgba(0,0,0,0.04)" }}
-            contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, color: "var(--foreground)", fontSize: 12 }}
+            contentStyle={tooltipStyle}
             formatter={(v) => [formatPct(Number(v) / 100, 1), "12m vs prior 12m"]}
             labelFormatter={(label, payload) => (payload?.[0]?.payload as { fullName?: string })?.fullName ?? String(label)}
           />

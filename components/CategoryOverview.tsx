@@ -20,7 +20,7 @@ export default function CategoryOverview({ positions, currency, pies: piesProp }
   if (total <= 0) return null;
 
   return (
-    <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+    <section className="rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5">
       <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <h2 className="text-sm font-semibold tracking-wide">Allocation vs targets</h2>
