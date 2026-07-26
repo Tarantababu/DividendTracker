@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { getAccountSummary, getPies, getPositions, syncDividends, T212Error } from "@/lib/t212";
 import { prettyTicker } from "@/lib/analytics";
-import { fetchDayMove, fetchMacro, fetchMarketNews, fetchTickerNews, withTimeout, type MacroQuote } from "@/lib/marketData";
+import { fetchDayMove, fetchMacro, fetchMarketMovers, fetchMarketNews, fetchTickerNews, withTimeout, type MacroQuote, type MarketMovers } from "@/lib/marketData";
 import { resolveSymbol } from "@/lib/yahooFund";
 import { contributionStats, externalCashflows } from "@/lib/fire";
 import { syncTransactions } from "@/lib/t212";
@@ -61,6 +61,7 @@ export interface DigestPayload {
     dividendsThisWeek: number;
   };
   macro: MacroQuote[];
+  marketMovers: MarketMovers; // biggest movers in the wider US/EU market, not just holdings
   gainers: MoverNote[];
   losers: MoverNote[];
   sections: DigestSection[]; // macro picture, what it means for you, watch list, etc.
@@ -102,6 +103,7 @@ Return ONLY valid JSON (no markdown fence) shaped exactly:
 
 Rules for "body": plain text with "- " bullets and **bold** for emphasis. No headings, no tables, no links (links are attached separately), no code. 3-6 bullets each, each bullet a full, specific thought with the actual number from the data. Keep every section tight and readable.
 - "Macro picture": what indices/rates/FX/crypto did today and WHY (per the headlines). Go deeper than the numbers: for each major move, name the transmission mechanism (why higher yields hit long-duration growth stocks, why a stronger dollar pressures commodities, etc.) so the reader learns the plumbing. 5-6 bullets here — this is the section they read to learn.
+- Use the WIDER MARKET MOVERS list (big US/European names the investor does NOT own) in "Macro picture" for sector colour — e.g. what the day's biggest large-cap moves say about which sectors led or lagged, and whether that theme touches their holdings. Never imply they own these names.
 - "Trends & regime": zoom out using the 1w/1m/3m/1y changes, 52-week range position and 50/200-day averages provided. Is each market in an uptrend, downtrend or range? Any divergences (e.g. Europe outperforming the US, gold up with yields)? What macro regime does the combination suggest, and what typically drives that regime? Reference the actual trend numbers.
 - "What moved your portfolio": their biggest euro movers and the driver, referencing tickers.
 - "What it means for you": the practical read for a long-horizon dividend/FIRE investor — is this noise or signal, does it change anything, what NOT to do. Be honest when the answer is "nothing to do".
@@ -118,6 +120,7 @@ function buildContext(d: {
   news: NewsItem[];
   gainers: Mover[];
   losers: Mover[];
+  marketMovers: MarketMovers;
   moverNews: Map<string, NewsItem[]>;
   dayChange: number | null;
   dayChangePct: number | null;
@@ -151,6 +154,14 @@ function buildContext(d: {
     `LOSERS: ${d.losers.map((m) => `${m.ticker} (${m.name}) ${cur}${m.dayChange.toFixed(0)} (${(m.dayChangePct * 100).toFixed(2)}%), value ${cur}${m.value.toFixed(0)}`).join("; ") || "none"}`,
   );
   lines.push(`DIVIDENDS TODAY: ${d.divToday.length ? d.divToday.map((x) => `${x.ticker} ${cur}${x.amount.toFixed(2)}`).join("; ") : "none"}; last 7 days total ${cur}${d.divWeek.toFixed(2)}`);
+  const mm = d.marketMovers;
+  const fmtMM = (arr: MarketMovers["usGainers"]) => arr.map((m) => `${m.name} (${m.symbol}) ${m.changePct >= 0 ? "+" : ""}${m.changePct.toFixed(1)}%`).join("; ") || "none";
+  lines.push("");
+  lines.push("WIDER MARKET MOVERS (large caps, NOT held by this investor — use for market colour and sector read):");
+  lines.push(`  US gainers: ${fmtMM(mm.usGainers)}`);
+  lines.push(`  US losers: ${fmtMM(mm.usLosers)}`);
+  lines.push(`  Europe gainers: ${fmtMM(mm.euGainers)}`);
+  lines.push(`  Europe losers: ${fmtMM(mm.euLosers)}`);
   lines.push("");
   lines.push("HEADLINES PER MOVER:");
   for (const [ticker, items] of d.moverNews) {
@@ -174,13 +185,14 @@ export async function GET(req: NextRequest) {
     // Everything in parallel, each with its own timeout so one slow upstream can't
     // eat the whole serverless budget (a 502 is worse than a digest missing a part).
     const origin = req.nextUrl.origin;
-    const [summary, positions, pies, dividends, macro, news, histRes] = await Promise.all([
+    const [summary, positions, pies, dividends, macro, news, marketMovers, histRes] = await Promise.all([
       getAccountSummary(),
       getPositions(),
       withTimeout(getPies(), 30_000, [] as Awaited<ReturnType<typeof getPies>>),
       withTimeout(syncDividends(false), 40_000, { items: [], lastSync: null } as Awaited<ReturnType<typeof syncDividends>>),
       withTimeout(fetchMacro(), 25_000, [] as MacroQuote[]),
       withTimeout(fetchMarketNews(), 20_000, []),
+      withTimeout(fetchMarketMovers(), 30_000, { usGainers: [], usLosers: [], euGainers: [], euLosers: [] } as MarketMovers),
       // The reconstruction is the heaviest dependency (it syncs the full order
       // history on a cold instance). Give it a hard ceiling; without it we simply
       // report no movers rather than failing the whole digest.
@@ -275,6 +287,7 @@ export async function GET(req: NextRequest) {
         dividendsThisWeek: divWeek,
       },
       macro,
+      marketMovers,
       gainers: gainers.map((m) => ({ ...m, why: "", links: moverNews.get(m.ticker) ?? [] })),
       losers: losers.map((m) => ({ ...m, why: "", links: moverNews.get(m.ticker) ?? [] })),
       sections: [],
@@ -297,6 +310,7 @@ export async function GET(req: NextRequest) {
       news,
       gainers,
       losers,
+      marketMovers,
       moverNews,
       dayChange: histRes?.today.change ?? null,
       dayChangePct: histRes?.today.changePct ?? null,

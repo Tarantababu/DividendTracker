@@ -146,7 +146,9 @@ export async function fetchMacroQuote(symbol: string, name: string): Promise<Mac
     const meta = result?.meta;
     const closes = (result?.indicators?.quote?.[0]?.close ?? []).filter((c): c is number => c != null);
     const price = meta?.regularMarketPrice ?? closes.at(-1) ?? null;
-    const prev = meta?.previousClose ?? meta?.chartPreviousClose ?? (closes.length >= 2 ? closes[closes.length - 2] : null);
+    // NOT chartPreviousClose — on a 1y range that's the close a YEAR ago, which
+    // would report the annual move as today's change. Yesterday's close only.
+    const prev = meta?.previousClose ?? (closes.length >= 2 ? closes[closes.length - 2] : null);
     if (price == null) return empty;
 
     const last50 = closes.slice(-50);
@@ -193,6 +195,95 @@ export async function fetchMacro(): Promise<MacroQuote[]> {
   return Promise.all(MACRO_SYMBOLS.map((m) => fetchMacroQuote(m.symbol, m.name)));
 }
 
+export interface MarketMover {
+  symbol: string;
+  name: string;
+  price: number | null;
+  changePct: number; // %
+  exchange: string | null;
+  currency: string | null;
+}
+
+interface ScreenerQuote {
+  symbol?: string;
+  shortName?: string;
+  longName?: string;
+  regularMarketPrice?: number;
+  regularMarketChangePercent?: number;
+  marketCap?: number;
+  fullExchangeName?: string;
+  currency?: string;
+}
+
+/**
+ * US day gainers/losers from Yahoo's predefined screener, filtered to real
+ * large caps so the list reads like the S&P rather than penny-stock noise.
+ */
+async function fetchUsMovers(direction: "day_gainers" | "day_losers", minMarketCap = 5e9, limit = 5): Promise<MarketMover[]> {
+  try {
+    const res = await fetch(`https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved?scrIds=${direction}&count=50`, {
+      headers: { "User-Agent": UA },
+      cache: "no-store",
+    });
+    if (!res.ok) return [];
+    const quotes = (((await res.json()) as { finance?: { result?: Array<{ quotes?: ScreenerQuote[] }> } }).finance?.result?.[0]?.quotes ?? []) as ScreenerQuote[];
+    return quotes
+      .filter((q) => q.symbol && typeof q.regularMarketChangePercent === "number" && (q.marketCap ?? 0) >= minMarketCap)
+      .slice(0, limit)
+      .map((q) => ({
+        symbol: q.symbol!,
+        name: q.shortName || q.longName || q.symbol!,
+        price: q.regularMarketPrice ?? null,
+        changePct: q.regularMarketChangePercent!,
+        exchange: q.fullExchangeName ?? null,
+        currency: q.currency ?? null,
+      }));
+  } catch {
+    return [];
+  }
+}
+
+// Yahoo's predefined screeners are US-only (the region param is ignored), so the
+// European board is computed from a curated large-cap universe instead.
+const EU_UNIVERSE: Array<[string, string]> = [
+  ["SAP.DE", "SAP"], ["SIE.DE", "Siemens"], ["ALV.DE", "Allianz"], ["DTE.DE", "Deutsche Telekom"], ["AIR.DE", "Airbus"],
+  ["MBG.DE", "Mercedes-Benz"], ["BMW.DE", "BMW"], ["VOW3.DE", "Volkswagen"], ["BAS.DE", "BASF"], ["BAYN.DE", "Bayer"],
+  ["MUV2.DE", "Munich Re"], ["DBK.DE", "Deutsche Bank"], ["RHM.DE", "Rheinmetall"], ["IFX.DE", "Infineon"], ["ADS.DE", "Adidas"],
+  ["ASML.AS", "ASML"], ["INGA.AS", "ING"], ["AD.AS", "Ahold Delhaize"], ["PHIA.AS", "Philips"],
+  ["MC.PA", "LVMH"], ["OR.PA", "L'Oréal"], ["TTE.PA", "TotalEnergies"], ["SAN.PA", "Sanofi"], ["AIR.PA", "Airbus (Paris)"],
+  ["BNP.PA", "BNP Paribas"], ["SU.PA", "Schneider Electric"], ["RMS.PA", "Hermès"],
+  ["ISP.MI", "Intesa Sanpaolo"], ["ENI.MI", "Eni"], ["ENEL.MI", "Enel"],
+  ["SAN.MC", "Banco Santander"], ["IBE.MC", "Iberdrola"], ["ITX.MC", "Inditex"],
+  ["NESN.SW", "Nestlé"], ["NOVN.SW", "Novartis"], ["ROG.SW", "Roche"],
+  ["SHEL.L", "Shell"], ["AZN.L", "AstraZeneca"], ["HSBA.L", "HSBC"], ["ULVR.L", "Unilever"],
+];
+
+/** European large-cap gainers/losers for the day, from the curated universe. */
+export async function fetchEuropeMovers(limit = 5): Promise<{ gainers: MarketMover[]; losers: MarketMover[] }> {
+  const results: (MarketMover | null)[] = await Promise.all(
+    EU_UNIVERSE.map(async ([symbol, name]) => {
+      const mv = await fetchDayMove(symbol);
+      if (!mv) return null;
+      return { symbol, name, price: mv.price, changePct: mv.changePct * 100, exchange: symbol.split(".")[1] ?? null, currency: null };
+    }),
+  );
+  const ok = results.filter((r): r is MarketMover => r != null).sort((a, b) => b.changePct - a.changePct);
+  return { gainers: ok.slice(0, limit), losers: [...ok].reverse().slice(0, limit) };
+}
+
+export interface MarketMovers {
+  usGainers: MarketMover[];
+  usLosers: MarketMover[];
+  euGainers: MarketMover[];
+  euLosers: MarketMover[];
+}
+
+/** Day gainers/losers across US large caps and European large caps. */
+export async function fetchMarketMovers(): Promise<MarketMovers> {
+  const [usGainers, usLosers, eu] = await Promise.all([fetchUsMovers("day_gainers"), fetchUsMovers("day_losers"), fetchEuropeMovers()]);
+  return { usGainers, usLosers, euGainers: eu.gainers, euLosers: eu.losers };
+}
+
 /** Resolve a promise to `fallback` if it takes longer than `ms`. Keeps one slow
  *  upstream from blowing the whole serverless invocation's time budget. */
 export function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
@@ -219,7 +310,8 @@ export async function fetchDayMove(symbol: string): Promise<DayMove | null> {
     const result = ((await res.json()) as YahooChart).chart.result?.[0];
     const closes = (result?.indicators?.quote?.[0]?.close ?? []).filter((c): c is number => c != null);
     const price = result?.meta?.regularMarketPrice ?? closes.at(-1) ?? null;
-    const prev = result?.meta?.previousClose ?? result?.meta?.chartPreviousClose ?? (closes.length >= 2 ? closes[closes.length - 2] : null);
+    // Same trap as above: chartPreviousClose is the close before the whole range.
+    const prev = result?.meta?.previousClose ?? (closes.length >= 2 ? closes[closes.length - 2] : null);
     if (price == null || prev == null || prev === 0) return null;
     return { price, prevClose: prev, changePct: (price - prev) / prev };
   } catch {

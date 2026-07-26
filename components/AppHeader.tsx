@@ -19,12 +19,14 @@ export default function AppHeader() {
   const pathname = usePathname();
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-[color-mix(in_srgb,var(--background)_82%,transparent)] backdrop-blur-md print:hidden">
-      <div className="mx-auto flex h-13 w-full max-w-6xl items-center justify-between gap-3 px-5">
+      <div className="mx-auto flex h-13 w-full max-w-6xl items-center justify-between gap-3 px-4 sm:px-5">
         <Link href="/" className="flex shrink-0 items-center gap-2 text-sm font-semibold tracking-tight">
           <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-[var(--primary)] text-[11px] font-bold text-white">D</span>
           <span className="hidden sm:inline">Dividend Tracker</span>
         </Link>
-        <nav className="no-scrollbar flex items-center gap-1 overflow-x-auto">
+        {/* min-w-0 lets this flex child shrink so overflow-x-auto actually scrolls
+            instead of forcing the whole page wider than the viewport on phones. */}
+        <nav className="no-scrollbar flex min-w-0 items-center gap-1 overflow-x-auto">
           {LINKS.map((l) => (
             <Link
               key={l.href}
