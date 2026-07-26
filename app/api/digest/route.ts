@@ -70,16 +70,84 @@ export interface DigestPayload {
   note?: string;
 }
 
+/**
+ * Best-effort parse of a possibly-truncated JSON object. A long generation that
+ * gets cut off still contains most of the digest, so rather than throwing it away
+ * we close the open brackets and keep whatever parsed cleanly.
+ */
+function salvageJson(raw: string): Record<string, unknown> | null {
+  const t = raw
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/```\s*$/, "")
+    .trim();
+  if (!t.startsWith("{")) return null;
+  try {
+    return JSON.parse(t) as Record<string, unknown>;
+  } catch {
+    /* truncated — repair below */
+  }
+  // Walk the text tracking string/escape state so we only cut at structural points.
+  const stack: string[] = [];
+  let inStr = false;
+  let esc = false;
+  const safeEnds: number[] = [];
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === "\\") esc = true;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') inStr = true;
+    else if (c === "{" || c === "[") stack.push(c === "{" ? "}" : "]");
+    else if (c === "}" || c === "]") {
+      stack.pop();
+      safeEnds.push(i); // end of a complete nested value
+    }
+  }
+  // Try progressively earlier complete values, closing whatever is still open.
+  for (let k = safeEnds.length - 1; k >= 0; k--) {
+    const end = safeEnds[k];
+    const slice = t.slice(0, end + 1);
+    const open: string[] = [];
+    let s = false;
+    let e = false;
+    for (let i = 0; i < slice.length; i++) {
+      const c = slice[i];
+      if (s) {
+        if (e) e = false;
+        else if (c === "\\") e = true;
+        else if (c === '"') s = false;
+        continue;
+      }
+      if (c === '"') s = true;
+      else if (c === "{") open.push("}");
+      else if (c === "[") open.push("]");
+      else if (c === "}" || c === "]") open.pop();
+    }
+    // Drop a dangling comma before closing, else JSON.parse rejects it.
+    const cleaned = slice.replace(/,\s*$/, "");
+    try {
+      return JSON.parse(cleaned + open.reverse().join("")) as Record<string, unknown>;
+    } catch {
+      /* step back to an earlier boundary */
+    }
+  }
+  return null;
+}
+
 const SYSTEM = `You are a sharp financial analyst writing a DAILY DIGEST for one retail investor. They hold a dividend-ETF portfolio on Trading212, live in Germany, and are working toward FIRE. You get their real portfolio numbers, today's market data, and today's headlines.
 
 Your job: explain what happened today on BOTH scales — macro (world/markets) and micro (their actual holdings) — and what it MEANS for them specifically. Be concrete and grounded ONLY in the data given. Never invent numbers, prices or events. If the data is thin, say so plainly.
 
 This investor wants to LEARN macro every day, not just be told numbers. Lean into the macro side: explain mechanisms and trends, always in plain English, always tied to the actual data given.
 
-Return ONLY valid JSON (no markdown fence) shaped exactly:
+Return ONLY valid JSON (no markdown fence). Emit the keys in EXACTLY this order — headline, mood, sections, moverNotes, education — so the most important content is written first:
 {
   "headline": "one punchy sentence (<=110 chars) summarising the day for this investor",
   "mood": "risk-on" | "risk-off" | "mixed" | "quiet",
+  "sections": [ /* see below */ ],
   "moverNotes": [ { "ticker": "AAPL", "why": "1-2 sentences: the most likely driver, tied to a headline or macro move given. Say 'no clear news — likely sector/market drift' when nothing explains it." } ],
   "education": [
     {
@@ -88,16 +156,16 @@ Return ONLY valid JSON (no markdown fence) shaped exactly:
       "today": "2-3 sentences connecting it to today's exact numbers/trends given, so the lesson sticks.",
       "readMore": [ { "title": "Specific, real, stable reference page (Investopedia, FRED, ECB/Fed explainer, Wikipedia)", "url": "https://..." } ]
     }
-  ],
-  "sections": [
+  ]
+}
+
+The "sections" array (written FIRST, right after mood) is exactly these six, in order:
     { "heading": "Macro picture", "body": "..." },
     { "heading": "Trends & regime", "body": "..." },
     { "heading": "What moved your portfolio", "body": "..." },
     { "heading": "What it means for you", "body": "..." },
     { "heading": "Dividends & income", "body": "..." },
     { "heading": "Watch tomorrow", "body": "..." }
-  ]
-}
 
 "education": give 2-3 topics. Pick concepts the day's data genuinely demonstrates (rates vs growth stocks, yield-curve moves, DXY/EUR strength, VIX regimes, gold as a real-rate hedge, breadth, sector rotation, covered-call NAV erosion, dividend vs total return, currency drag for a EUR investor…). Vary them day to day. Only use readMore URLs you are confident exist and are stable — prefer investopedia.com/terms/..., fred.stlouisfed.org, ecb.europa.eu, federalreserve.gov, en.wikipedia.org. 1-2 links each. Never invent a URL that looks plausible but you are unsure about; fewer links is better than a broken one.
 
@@ -320,54 +388,112 @@ export async function GET(req: NextRequest) {
     });
 
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, maxRetries: 1 });
-    let text = "";
-    try {
-      // Streamed so the SDK holds the connection open predictably, and bounded so
-      // the whole request stays inside the platform's function limit.
-      const stream = client.messages.stream({
-        model: "claude-opus-4-8",
-        max_tokens: 6000,
-        system: SYSTEM,
-        messages: [{ role: "user", content: `Today's data:\n\n${context}\n\nWrite the digest JSON now.` }],
-      });
-      const msg = await withTimeout(stream.finalMessage(), 150_000, null);
-      if (!msg) {
-        stream.abort();
-        throw new Error("AI timed out");
+    const userMsg = `Today's data:\n\n${context}\n\nWrite the digest JSON now.`;
+
+    /**
+     * Run one generation, accumulating tokens as they stream. If we hit the time
+     * budget we abort but KEEP what already arrived — a truncated digest still
+     * carries the headline and the first sections, which is far better than an
+     * error. Returns whatever text we got (possibly partial).
+     */
+    async function generate(model: string, maxTokens: number, budgetMs: number): Promise<{ text: string; complete: boolean; error?: unknown }> {
+      let acc = "";
+      try {
+        const stream = client.messages.stream({ model, max_tokens: maxTokens, system: SYSTEM, messages: [{ role: "user", content: userMsg }] });
+        stream.on("text", (t) => {
+          acc += t;
+        });
+        // Swallow the stream's own error event; the awaited promise below reports it.
+        stream.on("error", () => {});
+        const done = await withTimeout(
+          stream.finalMessage().then(
+            () => ({ ok: true }) as const,
+            (e: unknown) => ({ ok: false, e }) as const,
+          ),
+          budgetMs,
+          null,
+        );
+        if (!done) {
+          stream.abort();
+          return { text: acc, complete: false, error: new Error("timeout") };
+        }
+        if (!done.ok) return { text: acc, complete: false, error: done.e };
+        return { text: acc, complete: true };
+      } catch (e) {
+        return { text: acc, complete: false, error: e };
       }
-      text = msg.content.map((c) => (c.type === "text" ? c.text : "")).join("").trim();
-    } catch (aiErr) {
-      // Data is still useful without commentary — return it rather than erroring out.
-      base.headline = "Market data below — the AI commentary didn't finish this time.";
-      base.note = `AI commentary unavailable (${aiErr instanceof Error ? aiErr.message : "error"}). Press Rebuild to try again.`;
-      // Deliberately not cached, so the next attempt can still produce a full digest.
+    }
+
+    /** Turn an SDK failure into something the user can actually act on. */
+    function explain(err: unknown): string {
+      const e = err as { status?: number; message?: string } | undefined;
+      const msg = String(e?.message ?? "");
+      if (/credit balance is too low/i.test(msg))
+        return "Your Anthropic API credit has run out, so the commentary couldn't be written. Top up at console.anthropic.com/settings/billing — every number on this page is still live and correct.";
+      if (e?.status === 401 || /authentication/i.test(msg)) return "The ANTHROPIC_API_KEY was rejected. Check the key in .env.local — the market data below is unaffected.";
+      if (e?.status === 429 || /rate.?limit/i.test(msg)) return "Anthropic rate-limited the request. Wait a minute and press Rebuild — the data below is already up to date.";
+      if (/timeout/i.test(msg)) return "The analysis ran past its time limit. Press Rebuild — the market data is cached now, so the retry is much faster.";
+      if (e?.status && e.status >= 500) return "Anthropic had a server error. Press Rebuild in a moment — the data below is unaffected.";
+      return `The commentary couldn't be generated (${msg.slice(0, 120) || "unknown error"}). The data below is live and correct.`;
+    }
+
+    // Opus writes the best analysis but is the slow part. Give it most of the
+    // budget; if it can't finish (and nothing salvageable came back), retry once
+    // on the faster model rather than showing the user an error.
+    let parsed: Record<string, unknown> | null = null;
+    let degraded: string | null = null;
+
+    const first = await generate("claude-opus-4-8", 5000, 135_000);
+    parsed = salvageJson(first.text);
+    if (parsed && !first.complete) degraded = "Written right up to the time limit, so the later sections may be shorter than usual.";
+
+    let lastError = first.error;
+    if (!parsed) {
+      // Only worth retrying if the failure was about time, not the account. A
+      // credit/auth problem will fail identically on the second model.
+      const fatal = /credit balance is too low|authentication/i.test(String((first.error as { message?: string })?.message ?? ""));
+      if (!fatal) {
+        const second = await generate("claude-sonnet-5", 5000, 90_000);
+        parsed = salvageJson(second.text);
+        lastError = second.error ?? first.error;
+        if (parsed) degraded = "Today's commentary was written by the faster model — the main one ran long.";
+      }
+    }
+
+    if (!parsed) {
+      // Return the (useful) market data uncached, with the real reason so the user
+      // knows whether to retry, top up credit, or fix a key.
+      base.headline = "Markets and your portfolio are below — today's written commentary is missing.";
+      base.note = explain(lastError);
       return NextResponse.json(base);
     }
-    const json = text.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
 
     try {
-      const parsed = JSON.parse(json) as {
+      const p = parsed as {
         headline?: string;
         mood?: DigestPayload["mood"];
         moverNotes?: { ticker: string; why: string }[];
         sections?: DigestSection[];
         education?: LearnTopic[];
       };
-      const whyBy = new Map((parsed.moverNotes ?? []).map((n) => [n.ticker, n.why]));
-      base.headline = parsed.headline?.trim() || "Your daily portfolio and market digest.";
-      base.mood = parsed.mood ?? "mixed";
-      base.sections = (parsed.sections ?? []).filter((s) => s?.heading && s?.body);
-      base.education = (parsed.education ?? [])
+      const whyBy = new Map((p.moverNotes ?? []).map((n) => [n.ticker, n.why]));
+      base.headline = p.headline?.trim() || "Your daily portfolio and market digest.";
+      base.mood = p.mood ?? "mixed";
+      base.sections = (p.sections ?? []).filter((s) => s?.heading && s?.body);
+      base.education = (p.education ?? [])
         .filter((t) => t?.concept && t?.explain)
         .map((t) => ({ ...t, readMore: (t.readMore ?? []).filter((r) => r?.url?.startsWith("https://")) }));
       base.gainers = base.gainers.map((g) => ({ ...g, why: whyBy.get(g.ticker) ?? "" }));
       base.losers = base.losers.map((l) => ({ ...l, why: whyBy.get(l.ticker) ?? "" }));
+      if (degraded) base.note = degraded;
     } catch {
-      base.headline = "Digest generated, but the AI response couldn't be parsed — raw data below.";
-      base.note = "AI returned an unexpected format.";
+      base.headline = "Markets and your portfolio below — today's written commentary didn't come through.";
+      base.note = "The analysis came back in an unexpected format. All the data on this page is live and correct; press Rebuild to try again.";
+      return NextResponse.json(base); // uncached, so a retry can still succeed
     }
 
-    store[key] = { at: Date.now(), payload: base } satisfies Cached;
+    // Only cache a digest that actually has commentary.
+    if (base.sections.length > 0) store[key] = { at: Date.now(), payload: base } satisfies Cached;
     return NextResponse.json(base);
   } catch (err) {
     if (err instanceof T212Error) {

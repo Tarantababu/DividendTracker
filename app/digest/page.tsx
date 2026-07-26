@@ -240,7 +240,9 @@ export default function DigestPage() {
       {/* Headline take */}
       <section className="mt-5 rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5">
         <p className="text-base font-semibold leading-snug">{data.headline}</p>
-        {data.note && <p className="mt-2 text-xs text-red">{data.note}</p>}
+        {/* A note alongside real commentary is informational (e.g. written by the
+            faster model); a note with no sections means the commentary failed. */}
+        {data.note && <p className={`mt-2 text-xs ${data.sections.length > 0 ? "text-muted-2" : "text-red"}`}>{data.note}</p>}
         <div className="num mt-4 grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
           <div>
             <div className="text-[11px] uppercase tracking-wide text-muted-2">Portfolio</div>
