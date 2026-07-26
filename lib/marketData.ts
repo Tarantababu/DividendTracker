@@ -88,6 +88,16 @@ export interface MacroQuote {
   price: number | null;
   changePct: number | null;
   currency: string | null;
+  // Trend context — lets the digest talk about direction, not just today's tick.
+  weekPct: number | null;
+  monthPct: number | null;
+  quarterPct: number | null;
+  yearPct: number | null;
+  low52: number | null;
+  high52: number | null;
+  pctOf52wRange: number | null; // 0 = at the 52w low, 100 = at the high
+  vs50dma: number | null; // % above/below the 50-day average
+  vs200dma: number | null; // % above/below the 200-day average
 }
 
 interface YahooChart {
@@ -99,24 +109,68 @@ interface YahooChart {
   };
 }
 
-/** Spot price + day change for one symbol (index, FX, yield). */
+const pctFrom = (closes: number[], daysBack: number, price: number): number | null => {
+  const i = closes.length - 1 - daysBack;
+  const past = i >= 0 ? closes[i] : closes[0];
+  return past != null && past !== 0 ? ((price - past) / past) * 100 : null;
+};
+
+const mean = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
+
+/** Spot price, day change and trend context for one symbol (index, FX, yield). */
 export async function fetchMacroQuote(symbol: string, name: string): Promise<MacroQuote> {
-  const empty: MacroQuote = { symbol, name, price: null, changePct: null, currency: null };
+  const empty: MacroQuote = {
+    symbol,
+    name,
+    price: null,
+    changePct: null,
+    currency: null,
+    weekPct: null,
+    monthPct: null,
+    quarterPct: null,
+    yearPct: null,
+    low52: null,
+    high52: null,
+    pctOf52wRange: null,
+    vs50dma: null,
+    vs200dma: null,
+  };
   try {
-    const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=5d&interval=1d`, {
+    // 1y of daily closes gives both today's move and the trend picture in one call.
+    const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=1y&interval=1d`, {
       headers: { "User-Agent": UA },
       cache: "no-store",
     });
     if (!res.ok) return empty;
-    const meta = ((await res.json()) as YahooChart).chart.result?.[0]?.meta;
-    const price = meta?.regularMarketPrice ?? null;
-    const prev = meta?.previousClose ?? meta?.chartPreviousClose ?? null;
+    const result = ((await res.json()) as YahooChart).chart.result?.[0];
+    const meta = result?.meta;
+    const closes = (result?.indicators?.quote?.[0]?.close ?? []).filter((c): c is number => c != null);
+    const price = meta?.regularMarketPrice ?? closes.at(-1) ?? null;
+    const prev = meta?.previousClose ?? meta?.chartPreviousClose ?? (closes.length >= 2 ? closes[closes.length - 2] : null);
+    if (price == null) return empty;
+
+    const last50 = closes.slice(-50);
+    const last200 = closes.slice(-200);
+    const dma50 = mean(last50);
+    const dma200 = mean(last200);
+    const low52 = closes.length ? Math.min(...closes) : null;
+    const high52 = closes.length ? Math.max(...closes) : null;
+
     return {
       symbol,
       name,
       price,
-      changePct: price != null && prev != null && prev !== 0 ? ((price - prev) / prev) * 100 : null,
+      changePct: prev != null && prev !== 0 ? ((price - prev) / prev) * 100 : null,
       currency: meta?.currency ?? null,
+      weekPct: pctFrom(closes, 5, price),
+      monthPct: pctFrom(closes, 21, price),
+      quarterPct: pctFrom(closes, 63, price),
+      yearPct: closes.length ? pctFrom(closes, closes.length - 1, price) : null,
+      low52,
+      high52,
+      pctOf52wRange: low52 != null && high52 != null && high52 > low52 ? ((price - low52) / (high52 - low52)) * 100 : null,
+      vs50dma: dma50 ? ((price - dma50) / dma50) * 100 : null,
+      vs200dma: dma200 ? ((price - dma200) / dma200) * 100 : null,
     };
   } catch {
     return empty;

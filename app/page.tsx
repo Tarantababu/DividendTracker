@@ -38,6 +38,24 @@ interface ApiError {
   message: string;
 }
 
+// Last loaded portfolio snapshot for this browser session. Revisiting the
+// dashboard paints from it immediately instead of re-running the slow cold
+// fetch; "Refresh" is the only thing that pulls fresh data.
+const SNAPSHOT_KEY = "dividend-tracker-snapshot-v1";
+const SNAPSHOT_TTL_MS = 60 * 60 * 1000;
+
+function readSnapshot(): { overview: OverviewPayload; dividends: DividendsPayload } | null {
+  try {
+    const raw = sessionStorage.getItem(SNAPSHOT_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw) as { at: number; overview: OverviewPayload; dividends: DividendsPayload };
+    if (!s?.overview || !s?.dividends || Date.now() - s.at > SNAPSHOT_TTL_MS) return null;
+    return { overview: s.overview, dividends: s.dividends };
+  } catch {
+    return null;
+  }
+}
+
 const TABS = [
   { id: "overview", label: "Overview" },
   { id: "income", label: "Income & growth" },
@@ -138,10 +156,17 @@ export default function Dashboard() {
       }
       if (!ovRes.ok) throw await ovRes.json();
       if (!divRes.ok) throw await divRes.json();
-      setOverview(await ovRes.json());
-      setDividends(await divRes.json());
+      const ov = (await ovRes.json()) as OverviewPayload;
+      const dv = (await divRes.json()) as DividendsPayload;
+      setOverview(ov);
+      setDividends(dv);
       setError(null);
       setProgress(1);
+      try {
+        sessionStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ at: Date.now(), overview: ov, dividends: dv }));
+      } catch {
+        /* quota — the snapshot is only an optimisation */
+      }
     } catch (e) {
       const err = e as Partial<ApiError>;
       setError({ error: err.error ?? "NETWORK", message: err.message ?? "Could not reach the local API." });
@@ -159,9 +184,19 @@ export default function Dashboard() {
     return () => clearInterval(t);
   }, [loading]);
 
+  // Paint from this session's last snapshot so coming back to the dashboard is
+  // instant; only fetch when there's nothing cached. "Refresh" always refetches.
   useEffect(() => {
-    // Initial data fetch; all setState calls in `load` happen after the awaited response
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    const snap = readSnapshot();
+    if (snap) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setOverview(snap.overview);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setDividends(snap.dividends);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLoading(false);
+      return;
+    }
     load(false);
   }, [load]);
 

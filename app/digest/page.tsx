@@ -4,6 +4,30 @@ import { useEffect, useState } from "react";
 import { formatMoney } from "@/lib/analytics";
 import type { DigestPayload, MoverNote } from "@/app/api/digest/route";
 
+// Today's digest is kept in localStorage so revisiting the page is instant and
+// never re-runs the (slow, paid) build. Only "Rebuild" fetches again.
+const CACHE_KEY = "dividend-tracker-digest-v1";
+
+function readCache(): DigestPayload | null {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const p = JSON.parse(raw) as DigestPayload;
+    return p?.date === new Date().toISOString().slice(0, 10) ? p : null;
+  } catch {
+    return null;
+  }
+}
+
+// Rough stage timings so the bar reflects what the server is actually doing.
+const STAGES = [
+  { at: 0, label: "Fetching market data…" },
+  { at: 0.22, label: "Reading today's headlines…" },
+  { at: 0.4, label: "Checking your portfolio movers…" },
+  { at: 0.58, label: "Writing your digest…" },
+  { at: 0.92, label: "Almost there…" },
+];
+
 const MOOD: Record<DigestPayload["mood"], { label: string; cls: string }> = {
   "risk-on": { label: "Risk-on", cls: "bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] text-accent" },
   "risk-off": { label: "Risk-off", cls: "bg-[color-mix(in_srgb,var(--red)_16%,transparent)] text-red" },
@@ -78,10 +102,13 @@ function MoverCard({ m, currency, up }: { m: MoverNote; currency: string; up: bo
 export default function DigestPage() {
   const [data, setData] = useState<DigestPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
+  const [building, setBuilding] = useState(false);
+  const [progress, setProgress] = useState(0);
 
   const load = async (fresh: boolean) => {
-    if (fresh) setRefreshing(true);
+    setBuilding(true);
+    setProgress(0.04);
+    setError(null);
     try {
       const res = await fetch(`/api/digest${fresh ? "?fresh=1" : ""}`);
       const j = await res.json();
@@ -89,19 +116,39 @@ export default function DigestPage() {
         setError(j.message ?? "Could not build the digest.");
         return;
       }
-      setData(j as DigestPayload);
-      setError(null);
+      const payload = j as DigestPayload;
+      setProgress(1);
+      setData(payload);
+      try {
+        localStorage.setItem(CACHE_KEY, JSON.stringify(payload));
+      } catch {
+        /* quota — cache is only an optimisation */
+      }
     } catch {
       setError("Could not reach the API.");
     } finally {
-      setRefreshing(false);
+      setBuilding(false);
     }
   };
 
+  // Show today's cached digest instantly; only build when there isn't one.
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    const cached = readCache();
+    if (cached) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setData(cached);
+      return;
+    }
     load(false);
   }, []);
+
+  // Ease the bar forward while the request is in flight (a single long call, so
+  // there are no real milestones to hook into).
+  useEffect(() => {
+    if (!building) return;
+    const t = setInterval(() => setProgress((p) => (p < 0.93 ? p + (0.93 - p) * 0.035 : p)), 400);
+    return () => clearInterval(t);
+  }, [building]);
 
   if (error) {
     return (
@@ -112,10 +159,23 @@ export default function DigestPage() {
   }
 
   if (!data) {
+    const pct = Math.min(100, Math.round(progress * 100));
+    const stage = [...STAGES].reverse().find((s) => progress >= s.at)?.label ?? STAGES[0].label;
     return (
-      <main className="mx-auto w-full max-w-3xl flex-1 px-5 py-10">
-        <div className="animate-pulse text-center text-sm text-muted">Reading the markets and your portfolio…</div>
-        <p className="mt-2 text-center text-xs text-muted-2">Gathering headlines, macro data and today&apos;s movers, then writing the digest. First run takes ~30–60s.</p>
+      <main className="mx-auto w-full max-w-3xl flex-1 px-5 py-16">
+        <h1 className="text-center text-lg font-semibold">Building today&apos;s digest</h1>
+        <div className="mx-auto mt-6 max-w-sm">
+          <div className="flex items-baseline justify-between">
+            <span className="text-sm font-medium">{stage}</span>
+            <span className="num text-xs text-muted-2">{pct}%</span>
+          </div>
+          <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-surface">
+            <div className="h-full rounded-full bg-[var(--primary)] transition-[width] duration-500 ease-out" style={{ width: `${pct}%` }} />
+          </div>
+          <p className="mt-3 text-xs text-muted-2">
+            Gathering macro data, headlines and your movers, then writing the analysis. Takes ~40–70s — after this it&apos;s saved for the day and opens instantly.
+          </p>
+        </div>
       </main>
     );
   }
@@ -137,13 +197,20 @@ export default function DigestPage() {
           <span className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold ${mood.cls}`}>{mood.label}</span>
           <button
             onClick={() => load(true)}
-            disabled={refreshing}
+            disabled={building}
+            title="Fetches fresh market data and rewrites the digest"
             className="rounded-xl border border-border px-3 py-1.5 text-xs text-muted transition-colors hover:bg-card-hover hover:text-foreground disabled:opacity-50"
           >
-            {refreshing ? "Rebuilding…" : "Rebuild"}
+            {building ? `Rebuilding… ${Math.round(progress * 100)}%` : "Rebuild"}
           </button>
         </div>
       </div>
+
+      {building && (
+        <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-surface">
+          <div className="h-full rounded-full bg-[var(--primary)] transition-[width] duration-500 ease-out" style={{ width: `${Math.round(progress * 100)}%` }} />
+        </div>
+      )}
 
       {/* Headline take */}
       <section className="mt-5 rounded-2xl border border-border bg-card p-5 shadow-sm">
@@ -192,6 +259,27 @@ export default function DigestPage() {
               <div className={`num text-xs font-medium ${(m.changePct ?? 0) >= 0 ? "text-accent" : "text-red"}`}>
                 {m.changePct == null ? "—" : `${m.changePct >= 0 ? "+" : ""}${m.changePct.toFixed(2)}%`}
               </div>
+              <div className="num mt-1 flex flex-wrap gap-x-2 text-[10px] text-muted-2">
+                {m.monthPct != null && (
+                  <span title="1 month">
+                    1m {m.monthPct >= 0 ? "+" : ""}
+                    {m.monthPct.toFixed(1)}%
+                  </span>
+                )}
+                {m.yearPct != null && (
+                  <span title="1 year">
+                    1y {m.yearPct >= 0 ? "+" : ""}
+                    {m.yearPct.toFixed(1)}%
+                  </span>
+                )}
+              </div>
+              {m.pctOf52wRange != null && (
+                <div className="mt-1.5" title={`${m.pctOf52wRange.toFixed(0)}% of the 52-week range (${m.low52?.toFixed(2)}–${m.high52?.toFixed(2)})`}>
+                  <div className="h-1 w-full overflow-hidden rounded-full bg-surface">
+                    <div className="h-full rounded-full bg-[var(--primary)]" style={{ width: `${Math.max(2, Math.min(100, m.pctOf52wRange))}%` }} />
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -207,6 +295,39 @@ export default function DigestPage() {
             </section>
           ))}
         </div>
+      )}
+
+      {/* Daily macro lesson */}
+      {data.education.length > 0 && (
+        <section className="mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <h2 className="text-sm font-semibold tracking-wide">Learn today</h2>
+          <p className="mb-4 mt-0.5 text-xs text-muted-2">Macro concepts today&apos;s market actually demonstrated — with further reading.</p>
+          <div className="grid gap-4 md:grid-cols-2">
+            {data.education.map((t) => (
+              <article key={t.concept} className="rounded-xl border border-border bg-surface/40 p-4">
+                <h3 className="text-sm font-semibold text-primary">{t.concept}</h3>
+                <p className="mt-1.5 text-sm leading-relaxed text-muted">{t.explain}</p>
+                {t.today && (
+                  <p className="mt-2 rounded-lg bg-card px-3 py-2 text-xs leading-relaxed text-muted">
+                    <span className="font-semibold text-foreground">Today: </span>
+                    {t.today}
+                  </p>
+                )}
+                {t.readMore.length > 0 && (
+                  <ul className="mt-2.5 space-y-1">
+                    {t.readMore.map((r) => (
+                      <li key={r.url} className="truncate text-[11px]">
+                        <a href={r.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline" title={r.title}>
+                          ↗ {r.title}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </article>
+            ))}
+          </div>
+        </section>
       )}
 
       {/* Movers */}

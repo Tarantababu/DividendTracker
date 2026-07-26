@@ -33,12 +33,20 @@ export interface MoverNote {
   links: NewsItem[];
 }
 
+export interface LearnTopic {
+  concept: string; // e.g. "The yield curve"
+  explain: string; // plain-English explanation
+  today: string; // how it connects to today's data
+  readMore: { title: string; url: string }[];
+}
+
 export interface DigestPayload {
   date: string;
   currency: string;
   generatedAt: string;
   headline: string; // one-line take on the day
   mood: "risk-on" | "risk-off" | "mixed" | "quiet";
+  education: LearnTopic[]; // daily macro lesson tied to what actually happened
   portfolio: {
     totalValue: number;
     dayChange: number | null;
@@ -62,13 +70,24 @@ const SYSTEM = `You are a sharp financial analyst writing a DAILY DIGEST for one
 
 Your job: explain what happened today on BOTH scales — macro (world/markets) and micro (their actual holdings) — and what it MEANS for them specifically. Be concrete and grounded ONLY in the data given. Never invent numbers, prices or events. If the data is thin, say so plainly.
 
+This investor wants to LEARN macro every day, not just be told numbers. Lean into the macro side: explain mechanisms and trends, always in plain English, always tied to the actual data given.
+
 Return ONLY valid JSON (no markdown fence) shaped exactly:
 {
   "headline": "one punchy sentence (<=110 chars) summarising the day for this investor",
   "mood": "risk-on" | "risk-off" | "mixed" | "quiet",
   "moverNotes": [ { "ticker": "AAPL", "why": "1-2 sentences: the most likely driver, tied to a headline or macro move given. Say 'no clear news — likely sector/market drift' when nothing explains it." } ],
+  "education": [
+    {
+      "concept": "Short name of a macro concept that TODAY's data illustrates (e.g. 'Real yields', 'The dollar smile', 'Breadth vs the index')",
+      "explain": "3-5 sentences teaching the concept from first principles, plain English, no jargon without defining it. Assume a smart beginner.",
+      "today": "2-3 sentences connecting it to today's exact numbers/trends given, so the lesson sticks.",
+      "readMore": [ { "title": "Specific, real, stable reference page (Investopedia, FRED, ECB/Fed explainer, Wikipedia)", "url": "https://..." } ]
+    }
+  ],
   "sections": [
     { "heading": "Macro picture", "body": "..." },
+    { "heading": "Trends & regime", "body": "..." },
     { "heading": "What moved your portfolio", "body": "..." },
     { "heading": "What it means for you", "body": "..." },
     { "heading": "Dividends & income", "body": "..." },
@@ -76,8 +95,11 @@ Return ONLY valid JSON (no markdown fence) shaped exactly:
   ]
 }
 
+"education": give 2-3 topics. Pick concepts the day's data genuinely demonstrates (rates vs growth stocks, yield-curve moves, DXY/EUR strength, VIX regimes, gold as a real-rate hedge, breadth, sector rotation, covered-call NAV erosion, dividend vs total return, currency drag for a EUR investor…). Vary them day to day. Only use readMore URLs you are confident exist and are stable — prefer investopedia.com/terms/..., fred.stlouisfed.org, ecb.europa.eu, federalreserve.gov, en.wikipedia.org. 1-2 links each. Never invent a URL that looks plausible but you are unsure about; fewer links is better than a broken one.
+
 Rules for "body": plain text with "- " bullets and **bold** for emphasis. No headings, no tables, no links (links are attached separately), no code. 3-6 bullets each, each bullet a full, specific thought with the actual number from the data. Keep every section tight and readable.
-- "Macro picture": what indices/rates/FX/crypto did today and WHY (per the headlines), plus the regime it implies.
+- "Macro picture": what indices/rates/FX/crypto did today and WHY (per the headlines). Go deeper than the numbers: for each major move, name the transmission mechanism (why higher yields hit long-duration growth stocks, why a stronger dollar pressures commodities, etc.) so the reader learns the plumbing. 5-6 bullets here — this is the section they read to learn.
+- "Trends & regime": zoom out using the 1w/1m/3m/1y changes, 52-week range position and 50/200-day averages provided. Is each market in an uptrend, downtrend or range? Any divergences (e.g. Europe outperforming the US, gold up with yields)? What macro regime does the combination suggest, and what typically drives that regime? Reference the actual trend numbers.
 - "What moved your portfolio": their biggest euro movers and the driver, referencing tickers.
 - "What it means for you": the practical read for a long-horizon dividend/FIRE investor — is this noise or signal, does it change anything, what NOT to do. Be honest when the answer is "nothing to do".
 - "Dividends & income": today's/this week's payments, income trajectory, anything notable.
@@ -109,6 +131,16 @@ function buildContext(d: {
   );
   lines.push(`CATEGORIES (Trading212 pies): ${d.pies.map((p) => `${p.name} value ${cur}${p.value.toFixed(0)} / invested ${cur}${(p.netDeposits ?? p.invested).toFixed(0)}`).join("; ") || "none"}`);
   lines.push(`MACRO TODAY: ${d.macro.map((m) => `${m.name} ${m.price != null ? m.price.toFixed(2) : "n/a"}${m.changePct != null ? ` (${m.changePct >= 0 ? "+" : ""}${m.changePct.toFixed(2)}%)` : ""}`).join("; ")}`);
+  lines.push("");
+  lines.push("MACRO TRENDS (for the 'Trends & regime' section and the lesson):");
+  const pc = (v: number | null) => (v == null ? "n/a" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`);
+  for (const m of d.macro) {
+    lines.push(
+      `  ${m.name}: 1w ${pc(m.weekPct)}, 1m ${pc(m.monthPct)}, 3m ${pc(m.quarterPct)}, 1y ${pc(m.yearPct)}` +
+        `${m.pctOf52wRange != null ? `, at ${m.pctOf52wRange.toFixed(0)}% of its 52w range (${m.low52?.toFixed(2)}–${m.high52?.toFixed(2)})` : ""}` +
+        `${m.vs50dma != null ? `, ${pc(m.vs50dma)} vs 50dma` : ""}${m.vs200dma != null ? `, ${pc(m.vs200dma)} vs 200dma` : ""}`,
+    );
+  }
   lines.push(
     `GAINERS: ${d.gainers.map((m) => `${m.ticker} (${m.name}) +${cur}${m.dayChange.toFixed(0)} (${(m.dayChangePct * 100).toFixed(2)}%), value ${cur}${m.value.toFixed(0)}`).join("; ") || "none"}`,
   );
@@ -181,6 +213,7 @@ export async function GET(req: NextRequest) {
       generatedAt: new Date().toISOString(),
       headline: "",
       mood: "quiet",
+      education: [],
       portfolio: {
         totalValue: summary.totalValue,
         dayChange: histRes?.today.change ?? null,
@@ -238,11 +271,15 @@ export async function GET(req: NextRequest) {
         mood?: DigestPayload["mood"];
         moverNotes?: { ticker: string; why: string }[];
         sections?: DigestSection[];
+        education?: LearnTopic[];
       };
       const whyBy = new Map((parsed.moverNotes ?? []).map((n) => [n.ticker, n.why]));
       base.headline = parsed.headline?.trim() || "Your daily portfolio and market digest.";
       base.mood = parsed.mood ?? "mixed";
       base.sections = (parsed.sections ?? []).filter((s) => s?.heading && s?.body);
+      base.education = (parsed.education ?? [])
+        .filter((t) => t?.concept && t?.explain)
+        .map((t) => ({ ...t, readMore: (t.readMore ?? []).filter((r) => r?.url?.startsWith("https://")) }));
       base.gainers = base.gainers.map((g) => ({ ...g, why: whyBy.get(g.ticker) ?? "" }));
       base.losers = base.losers.map((l) => ({ ...l, why: whyBy.get(l.ticker) ?? "" }));
     } catch {
