@@ -112,7 +112,7 @@ export default function VideosPage() {
   };
 
   return (
-    <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
+    <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-8 sm:py-8">
       <h1 className="text-2xl font-bold tracking-tight">Episodes</h1>
       <p className="mt-1 text-sm text-muted">
         Weekly FIRE-journey videos generated from this tool — script by Claude, voiced with Dia, rendered, ready for YouTube review.

@@ -129,14 +129,14 @@ export default function FirePage() {
 
   if (error) {
     return (
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-8 sm:py-8">
         <div className="rounded-xl border border-border bg-card p-6 text-sm text-red">{error}</div>
       </main>
     );
   }
 
   return (
-    <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
+    <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-8 sm:py-8">
       <h1 className="text-2xl font-bold tracking-tight">FIRE progress</h1>
       <p className="mt-1 text-sm text-muted">
         Financial independence tracker — real deposits, real returns, projected forward

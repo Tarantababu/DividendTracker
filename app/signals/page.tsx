@@ -438,7 +438,7 @@ export default function SignalsPage() {
   const etfCount = Object.values(funds).filter((f) => f.isEtf).length;
 
   return (
-    <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
+    <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-8 sm:py-8">
       <header className="mb-6">
         <h1 className="text-xl font-semibold tracking-tight">Signals</h1>
         <p className="mt-0.5 text-xs text-muted-2">

@@ -281,7 +281,7 @@ export default function Dashboard() {
   const totalReturnPct = netInvested > 0 ? totalReturn / netInvested : null;
 
   return (
-    <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
+    <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-8 sm:py-8">
       <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Portfolio</h1>
@@ -330,7 +330,7 @@ export default function Dashboard() {
       </div>
 
       {/* Tab bar — sticky right under the app header */}
-      <div className="sticky top-12 z-30 -mx-4 mt-6 bg-[color-mix(in_srgb,var(--background)_88%,transparent)] px-4 py-2 backdrop-blur-md sm:-mx-6 sm:px-6">
+      <div className="sticky top-14 z-30 lg:top-0 -mx-4 mt-6 bg-[color-mix(in_srgb,var(--background)_88%,transparent)] px-4 py-2 backdrop-blur-md sm:-mx-6 sm:px-6">
         <div className="no-scrollbar flex w-fit max-w-full items-center gap-0.5 overflow-x-auto rounded-lg border border-border bg-surface p-0.5">
           {TABS.map((t) => (
             <button

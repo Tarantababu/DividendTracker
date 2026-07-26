@@ -1,44 +1,51 @@
 @import "tailwindcss";
 
 /* ============================================================================
-   Design tokens — "precision fintech"
-   Neutral greys + one accent, a strict 4px spatial grid, restrained elevation
-   and tabular numerals. Colour is reserved for meaning (gain / loss / action),
-   never decoration, so the numbers carry the page.
+   Design tokens — Fintech Dashboard UI Kit
+   Palette sampled from the kit's own screens: a near-black sidebar against white
+   content, dark slate as the action colour (not a bright hue), and colour spent
+   only on meaning — green for gains, red for losses, tints for categories.
    ========================================================================== */
 
 :root {
+  /* --- Sidebar: the kit's signature near-black rail --- */
+  --sidebar: #0d0d12;
+  --sidebar-fg: #ffffff;
+  --sidebar-muted: #8b90a0;
+  --sidebar-hover: #191b23;
+  --sidebar-width: 264px;
+
   /* --- Surfaces: a short, deliberate ramp (page → card → inset) --- */
-  --background: #f7f8fa;
-  --surface: #f0f2f6;
+  --background: #ffffff;
+  --surface: #f7f8fa;
   --card: #ffffff;
-  --card-hover: #f7f8fb;
-  --border: #e2e6ec;
-  --border-soft: #edf0f4;
-  --border-strong: #cfd5df;
+  --card-hover: #f7f8fa;
+  --border: #e5e7eb;
+  --border-soft: #eef0f3;
+  --border-strong: #d3d7de;
 
   /* --- Text: three levels only. More than three reads as noise. --- */
-  --foreground: #0e1117;
-  --muted: #59616f;
-  --muted-2: #8a92a1;
+  --foreground: #111827;
+  --muted: #4b5563;
+  --muted-2: #868c98;
 
   /* --- One action colour --- */
-  --primary: #4f46e5;
-  --primary-hover: #4338ca;
+  --primary: #1f2937;
+  --primary-hover: #0d0d12;
   --primary-fg: #ffffff;
-  --primary-dim: rgba(79, 70, 229, 0.09);
-  --ring: rgba(79, 70, 229, 0.35);
+  --primary-dim: rgba(31, 41, 55, 0.06);
+  --ring: rgba(31, 41, 55, 0.28);
 
   /* --- Semantic: direction of money --- */
-  --accent: #06855b; /* gain */
-  --accent-dim: rgba(6, 133, 91, 0.1);
-  --red: #d0342c; /* loss */
-  --red-dim: rgba(208, 52, 44, 0.1);
+  --accent: #16a34a; /* gain */
+  --accent-dim: rgba(22, 163, 74, 0.1);
+  --red: #dc2626; /* loss */
+  --red-dim: rgba(220, 38, 38, 0.09);
 
   /* --- Categorical (charts, category chips) — muted so one highlight wins --- */
   --blue: #3b82f6;
   --blue-dim: rgba(59, 130, 246, 0.1);
-  --amber: #d98207;
+  --amber: #d97706;
   --violet: #7c3aed;
   --teal: #0d9488;
   --pink: #db2777;

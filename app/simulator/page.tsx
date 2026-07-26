@@ -127,7 +127,7 @@ export default function SimulatorPage() {
   const cellInput = "num w-full rounded-lg border border-border bg-surface px-2 py-1.5 text-right text-sm outline-none focus:border-muted-2";
 
   return (
-    <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
+    <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-8 sm:py-8">
       <header className="mb-8 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Scenario simulator</h1>
