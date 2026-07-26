@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { getAccountSummary, getPies, getPositions, syncDividends, T212Error } from "@/lib/t212";
 import { prettyTicker } from "@/lib/analytics";
-import { fetchMacro, fetchMarketNews, fetchTickerNews, type MacroQuote } from "@/lib/marketData";
+import { fetchDayMove, fetchMacro, fetchMarketNews, fetchTickerNews, withTimeout, type MacroQuote } from "@/lib/marketData";
+import { resolveSymbol } from "@/lib/yahooFund";
+import { contributionStats, externalCashflows } from "@/lib/fire";
+import { syncTransactions } from "@/lib/t212";
 import type { NewsItem } from "@/lib/signals";
 import type { Mover, PortfolioHistoryPayload } from "@/app/api/portfolio-history/route";
 
@@ -168,30 +171,77 @@ export async function GET(req: NextRequest) {
   if (!fresh && hit && Date.now() - hit.at < 6 * 60 * 60 * 1000) return NextResponse.json(hit.payload);
 
   try {
-    // Portfolio + market data in parallel. Movers come from the reconstruction
-    // route via an internal call-free import path: we recompute from its payload.
+    // Everything in parallel, each with its own timeout so one slow upstream can't
+    // eat the whole serverless budget (a 502 is worse than a digest missing a part).
     const origin = req.nextUrl.origin;
     const [summary, positions, pies, dividends, macro, news, histRes] = await Promise.all([
       getAccountSummary(),
       getPositions(),
-      getPies().catch(() => []),
-      syncDividends(false).catch(() => ({ items: [] as Awaited<ReturnType<typeof syncDividends>>["items"] })),
-      fetchMacro(),
-      fetchMarketNews(),
-      fetch(`${origin}/api/portfolio-history`, { cache: "no-store" })
-        .then((r) => (r.ok ? (r.json() as Promise<PortfolioHistoryPayload>) : null))
-        .catch(() => null),
+      withTimeout(getPies(), 30_000, [] as Awaited<ReturnType<typeof getPies>>),
+      withTimeout(syncDividends(false), 40_000, { items: [], lastSync: null } as Awaited<ReturnType<typeof syncDividends>>),
+      withTimeout(fetchMacro(), 25_000, [] as MacroQuote[]),
+      withTimeout(fetchMarketNews(), 20_000, []),
+      // The reconstruction is the heaviest dependency (it syncs the full order
+      // history on a cold instance). Give it a hard ceiling; without it we simply
+      // report no movers rather than failing the whole digest.
+      withTimeout(
+        fetch(`${origin}/api/portfolio-history`, { cache: "no-store" })
+          .then((r) => (r.ok ? (r.json() as Promise<PortfolioHistoryPayload>) : null))
+          .catch(() => null),
+        70_000,
+        null as PortfolioHistoryPayload | null,
+      ),
     ]);
 
-    const movers = histRes?.today.movers ?? [];
+    // Prefer the reconstruction's movers; if it timed out, derive them directly from
+    // short Yahoo charts (much cheaper) so the digest still has its movers section.
+    let movers: Mover[] = histRes?.today.movers ?? [];
+    let fallbackDayChange: number | null = null;
+    if (movers.length === 0 && positions.length > 0) {
+      const moves = await withTimeout(
+        Promise.all(
+          positions.map(async (p) => {
+            const guess = prettyTicker(p.instrument.ticker);
+            const symbol = await resolveSymbol(p.instrument.name, guess);
+            const mv = (await fetchDayMove(symbol)) ?? (await fetchDayMove(guess));
+            if (!mv) return null;
+            const value = p.walletImpact.currentValue;
+            return {
+              t212Ticker: p.instrument.ticker,
+              ticker: guess,
+              name: p.instrument.name,
+              value,
+              dayChange: value * (mv.changePct / (1 + mv.changePct)), // value is post-move
+              dayChangePct: mv.changePct,
+            } satisfies Mover;
+          }),
+        ),
+        45_000,
+        [] as (Mover | null)[],
+      );
+      movers = moves.filter((m): m is Mover => m != null).sort((a, b) => b.dayChange - a.dayChange);
+      if (movers.length) fallbackDayChange = movers.reduce((s, m) => s + m.dayChange, 0);
+    }
     const gainers = movers.filter((m) => m.dayChange > 0).slice(0, 5);
     const losers = [...movers.filter((m) => m.dayChange < 0)].sort((a, b) => a.dayChange - b.dayChange).slice(0, 5);
 
-    // Headlines for the movers we're going to explain
+    // Second phase: mover headlines and net deposits together, both bounded. Running
+    // them in parallel keeps the worst case within the platform's function limit.
     const focus = [...gainers, ...losers];
     const moverNews = new Map<string, NewsItem[]>();
-    const fetched = await Promise.all(focus.map((m) => fetchTickerNews(m.ticker, m.name, 4)));
-    focus.forEach((m, i) => moverNews.set(m.ticker, fetched[i]));
+    const [fetched, netDepositsResult] = await Promise.all([
+      withTimeout(
+        Promise.all(focus.map((m) => fetchTickerNews(m.ticker, m.name, 4))),
+        25_000,
+        focus.map(() => [] as NewsItem[]),
+      ),
+      withTimeout(
+        syncTransactions(false).then((tx) => contributionStats(externalCashflows(tx.items)).netContributions),
+        40_000,
+        null as number | null,
+      ),
+    ]);
+    focus.forEach((m, i) => moverNews.set(m.ticker, fetched[i] ?? []));
 
     const divItems = dividends.items ?? [];
     const divToday = divItems
@@ -200,12 +250,10 @@ export async function GET(req: NextRequest) {
     const weekAgo = new Date(Date.now() - 7 * 86400_000).toISOString().slice(0, 10);
     const divWeek = divItems.filter((x) => x.paidOn.slice(0, 10) >= weekAgo).reduce((s, x) => s + x.amount, 0);
 
-    // Account-level net deposits (deposits − withdrawals), same source the dashboard
-    // uses — summing pie deposits would omit cash and realised P/L and disagree with it.
-    const netDeposits = await fetch(`${origin}/api/fire`, { cache: "no-store" })
-      .then((r) => (r.ok ? (r.json() as Promise<{ netContributions?: number }>) : null))
-      .then((j) => (typeof j?.netContributions === "number" ? j.netContributions : null))
-      .catch(() => null);
+    // Account-level net deposits (deposits − withdrawals), same basis the dashboard
+    // uses. Computed in-process above — calling /api/fire over HTTP would spawn a
+    // second cold serverless instance and repeat the whole transaction sync.
+    const netDeposits = netDepositsResult;
 
     const base: DigestPayload = {
       date: today,
@@ -216,8 +264,10 @@ export async function GET(req: NextRequest) {
       education: [],
       portfolio: {
         totalValue: summary.totalValue,
-        dayChange: histRes?.today.change ?? null,
-        dayChangePct: histRes?.today.changePct ?? null,
+        dayChange: histRes?.today.change ?? fallbackDayChange,
+        dayChangePct:
+          histRes?.today.changePct ??
+          (fallbackDayChange != null && summary.totalValue - fallbackDayChange !== 0 ? fallbackDayChange / (summary.totalValue - fallbackDayChange) : null),
         netDeposits,
         totalReturn: netDeposits != null ? summary.totalValue - netDeposits : null,
         cash: summary.cash.availableToTrade + summary.cash.inPies,
@@ -255,14 +305,30 @@ export async function GET(req: NextRequest) {
       netDeposits,
     });
 
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    const msg = await client.messages.create({
-      model: "claude-opus-4-8",
-      max_tokens: 8000,
-      system: SYSTEM,
-      messages: [{ role: "user", content: `Today's data:\n\n${context}\n\nWrite the digest JSON now.` }],
-    });
-    const text = msg.content.map((c) => (c.type === "text" ? c.text : "")).join("").trim();
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, maxRetries: 1 });
+    let text = "";
+    try {
+      // Streamed so the SDK holds the connection open predictably, and bounded so
+      // the whole request stays inside the platform's function limit.
+      const stream = client.messages.stream({
+        model: "claude-opus-4-8",
+        max_tokens: 6000,
+        system: SYSTEM,
+        messages: [{ role: "user", content: `Today's data:\n\n${context}\n\nWrite the digest JSON now.` }],
+      });
+      const msg = await withTimeout(stream.finalMessage(), 150_000, null);
+      if (!msg) {
+        stream.abort();
+        throw new Error("AI timed out");
+      }
+      text = msg.content.map((c) => (c.type === "text" ? c.text : "")).join("").trim();
+    } catch (aiErr) {
+      // Data is still useful without commentary — return it rather than erroring out.
+      base.headline = "Market data below — the AI commentary didn't finish this time.";
+      base.note = `AI commentary unavailable (${aiErr instanceof Error ? aiErr.message : "error"}). Press Rebuild to try again.`;
+      // Deliberately not cached, so the next attempt can still produce a full digest.
+      return NextResponse.json(base);
+    }
     const json = text.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
 
     try {

@@ -111,18 +111,35 @@ export default function DigestPage() {
     setError(null);
     try {
       const res = await fetch(`/api/digest${fresh ? "?fresh=1" : ""}`);
-      const j = await res.json();
-      if (!res.ok) {
-        setError(j.message ?? "Could not build the digest.");
+      // A platform timeout (502/504) returns HTML, not JSON — read defensively so
+      // the user gets the real reason instead of a generic network message.
+      const raw = await res.text();
+      let j: (DigestPayload & { message?: string }) | null = null;
+      try {
+        j = JSON.parse(raw);
+      } catch {
+        /* non-JSON error page */
+      }
+      if (!res.ok || !j) {
+        setError(
+          j?.message ??
+            (res.status === 502 || res.status === 504
+              ? "The digest took too long to build and the server cut it off. Press Rebuild — the market data is cached now, so the retry is much faster."
+              : `Could not build the digest (HTTP ${res.status}).`),
+        );
         return;
       }
-      const payload = j as DigestPayload;
+      const payload: DigestPayload = j;
       setProgress(1);
       setData(payload);
-      try {
-        localStorage.setItem(CACHE_KEY, JSON.stringify(payload));
-      } catch {
-        /* quota — cache is only an optimisation */
+      // Only persist a complete digest — caching a run whose commentary failed
+      // would pin the failure for the rest of the day.
+      if (payload.sections?.length) {
+        try {
+          localStorage.setItem(CACHE_KEY, JSON.stringify(payload));
+        } catch {
+          /* quota — cache is only an optimisation */
+        }
       }
     } catch {
       setError("Could not reach the API.");
@@ -150,10 +167,19 @@ export default function DigestPage() {
     return () => clearInterval(t);
   }, [building]);
 
-  if (error) {
+  if (error && !data) {
     return (
       <main className="mx-auto w-full max-w-3xl flex-1 px-5 py-10">
-        <div className="rounded-2xl border border-border bg-card p-6 text-center text-sm text-red">{error}</div>
+        <div className="rounded-2xl border border-border bg-card p-6 text-center">
+          <p className="text-sm text-red">{error}</p>
+          <button
+            onClick={() => load(true)}
+            disabled={building}
+            className="mt-4 rounded-xl border border-border px-4 py-2 text-xs text-muted transition-colors hover:bg-card-hover hover:text-foreground disabled:opacity-50"
+          >
+            {building ? `Rebuilding… ${Math.round(progress * 100)}%` : "Rebuild"}
+          </button>
+        </div>
       </main>
     );
   }

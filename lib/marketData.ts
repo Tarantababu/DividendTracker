@@ -192,3 +192,37 @@ export const MACRO_SYMBOLS: Array<{ symbol: string; name: string }> = [
 export async function fetchMacro(): Promise<MacroQuote[]> {
   return Promise.all(MACRO_SYMBOLS.map((m) => fetchMacroQuote(m.symbol, m.name)));
 }
+
+/** Resolve a promise to `fallback` if it takes longer than `ms`. Keeps one slow
+ *  upstream from blowing the whole serverless invocation's time budget. */
+export function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([p.catch(() => fallback), new Promise<T>((r) => setTimeout(() => r(fallback), ms))]);
+}
+
+export interface DayMove {
+  price: number;
+  prevClose: number;
+  changePct: number; // fraction
+}
+
+/**
+ * Today's % move for one symbol from a short chart — far cheaper than the full
+ * portfolio-history reconstruction when all we need is the day's change.
+ */
+export async function fetchDayMove(symbol: string): Promise<DayMove | null> {
+  try {
+    const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=5d&interval=1d`, {
+      headers: { "User-Agent": UA },
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const result = ((await res.json()) as YahooChart).chart.result?.[0];
+    const closes = (result?.indicators?.quote?.[0]?.close ?? []).filter((c): c is number => c != null);
+    const price = result?.meta?.regularMarketPrice ?? closes.at(-1) ?? null;
+    const prev = result?.meta?.previousClose ?? result?.meta?.chartPreviousClose ?? (closes.length >= 2 ? closes[closes.length - 2] : null);
+    if (price == null || prev == null || prev === 0) return null;
+    return { price, prevClose: prev, changePct: (price - prev) / prev };
+  } catch {
+    return null;
+  }
+}
