@@ -1,4 +1,4 @@
-import { NextResponse, after } from "next/server";
+import { NextResponse, NextRequest, after } from "next/server";
 import { getAccountSummary, getPositions, getPies, T212Error } from "@/lib/t212";
 import { readDiskCache, refreshOnce } from "@/lib/diskCache";
 import type { OverviewPayload } from "@/lib/types";
@@ -33,17 +33,19 @@ async function build(): Promise<OverviewPayload> {
   return payload;
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  // ?refresh=1 — user-initiated; bypass every cache and pull live numbers.
+  const force = req.nextUrl.searchParams.get("refresh") === "1";
   let disk: Awaited<ReturnType<typeof readDiskCache<OverviewPayload>>> = null;
   try {
-    if (cached && Date.now() - cached.at < TTL_MS) {
+    if (!force && cached && Date.now() - cached.at < TTL_MS) {
       return NextResponse.json(cached.payload);
     }
 
     // Cold instance: a rebuild costs ~30s against T212's rate limits. Serve the
     // last snapshot straight away — and when it's past its TTL, refresh after the
     // response so the next caller gets fresh data without anyone having waited.
-    disk = await readDiskCache<OverviewPayload>(DISK_FILE, TTL_MS);
+    disk = force ? null : await readDiskCache<OverviewPayload>(DISK_FILE, TTL_MS);
     if (disk && disk.ageMs < STALE_SERVE_MS) {
       cached = { payload: disk.value, at: Date.now() - disk.ageMs };
       if (!disk.fresh) after(() => refreshOnce(DISK_FILE, build).catch(() => undefined));

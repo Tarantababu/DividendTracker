@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Position } from "@/lib/types";
 import { prettyTicker } from "@/lib/analytics";
-import { CHART_SERIES } from "@/lib/chartTheme";
+import { CATEGORY_SERIES } from "@/lib/chartTheme";
 
 export const ALLOCATION_KEY = "dividend-tracker-allocation-v1";
 const CHANGE_EVENT = "allocation-changed";
@@ -31,9 +31,9 @@ export interface AllocationState {
   deposit: number;
 }
 
-// Single categorical palette for the whole app — same order as the chart theme so
-// a category keeps its colour whether it appears in a donut, a bar or a chip.
-export const CATEGORY_COLORS = [...CHART_SERIES];
+// Single categorical palette for the whole app, so a category keeps its colour
+// whether it appears in a donut, a bar, a chip or its own history chart.
+export const CATEGORY_COLORS = [...CATEGORY_SERIES];
 export const UNASSIGNED_COLOR = "var(--muted-2)";
 
 // Baked-in starter allocation so the tool is useful out of the box (no manual
@@ -218,6 +218,14 @@ export function useLiveCategories(pies: PieLike[] | null | undefined): Allocatio
 // and its result across every consumer, page-wide, with a single retry.
 let piesCache: PieLike[] | null = null;
 let piesPromise: Promise<PieLike[]> | null = null;
+
+/** Drop the shared client-side pie cache so the next consumer refetches.
+ *  Called when the user asks for a refresh — otherwise the page would keep
+ *  showing the pies it loaded on mount even after the server pulled fresh ones. */
+export function invalidatePies() {
+  piesCache = null;
+  piesPromise = null;
+}
 
 async function fetchPiesOnce(): Promise<PieLike[]> {
   for (let attempt = 0; attempt < 3; attempt++) {

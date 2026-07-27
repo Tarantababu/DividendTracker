@@ -28,6 +28,28 @@ export const CHART_SERIES = [
   "#0ea5e9",
 ] as const;
 
+/**
+ * Identity colours for categories (donut slices, chips, per-category charts).
+ * Deliberately NOT the generic series palette: --primary is near-black in this
+ * theme and would read as "no colour", while --accent/--red carry gain/loss
+ * meaning elsewhere and must not double as a category. These are evenly spaced
+ * hues at similar lightness, so no slice dominates and adjacent ones stay
+ * distinguishable.
+ */
+export const CATEGORY_SERIES = [
+  "#4f46e5", // indigo
+  "#0891b2", // cyan
+  "#d97706", // amber
+  "#7c3aed", // violet
+  "#0d9488", // teal
+  "#db2777", // pink
+  "#2563eb", // blue
+  "#65a30d", // olive
+  "#a21caf", // fuchsia
+  "#64748b", // slate
+] as const;
+export const categoryColor = (i: number) => CATEGORY_SERIES[i % CATEGORY_SERIES.length];
+
 export const seriesColor = (i: number) => CHART_SERIES[i % CHART_SERIES.length];
 
 /** Consistent axis ticks: small, quiet, tabular. */

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { DividendsPayload, OverviewPayload } from "@/lib/types";
 import type { FirePayload } from "@/app/api/fire/route";
+import { invalidatePies } from "@/lib/allocation";
 import {
   annualGrowthPerHolding,
   dividendGrowthByYear,
@@ -145,8 +146,18 @@ export default function Dashboard() {
       setProgress(0.12);
       // Fire both requests together but bump the bar as each one lands, so the
       // progress reflects real milestones (overview is the faster of the two).
-      const ovP = fetch("/api/overview");
-      const divP = fetch(`/api/dividends${refresh ? "?refresh=1" : ""}`);
+      // "Refresh" means the user wants live numbers, so force every cached source
+      // (overview carries pies) rather than only re-syncing dividends.
+      const q = refresh ? "?refresh=1" : "";
+      if (refresh) {
+        invalidatePies(); // otherwise components keep the pies they loaded on mount
+        sessionStorage.removeItem(SNAPSHOT_KEY);
+        // Rebuild the reconstruction in the background; the chart picks it up on
+        // its next fetch without holding up the headline numbers.
+        fetch("/api/portfolio-history?refresh=1").catch(() => {});
+      }
+      const ovP = fetch(`/api/overview${q}`);
+      const divP = fetch(`/api/dividends${q}`);
       ovP.then(() => setProgress((p) => Math.max(p, 0.6))).catch(() => {});
       divP.then(() => setProgress((p) => Math.max(p, 0.85))).catch(() => {});
       const [ovRes, divRes] = await Promise.all([ovP, divP]);

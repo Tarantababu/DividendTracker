@@ -1,4 +1,4 @@
-import { NextResponse, after } from "next/server";
+import { NextResponse, NextRequest, after } from "next/server";
 import { getPies, T212Error, type PieSummary } from "@/lib/t212";
 import { readDiskCache, refreshOnce } from "@/lib/diskCache";
 
@@ -37,13 +37,16 @@ function loadPies(): Promise<PiesPayload> {
 const DISK_FILE = "pies-snapshot.json";
 const STALE_SERVE_MS = 24 * 60 * 60 * 1000; // a day-old snapshot still beats a 25s wait
 
-export async function GET() {
-  if (cached && Date.now() - cached.at < TTL_MS) return NextResponse.json(cached.payload);
+export async function GET(req: NextRequest) {
+  // ?refresh=1 — the user explicitly asked for fresh numbers, so skip every cache
+  // and pay the rebuild.
+  const force = req.nextUrl.searchParams.get("refresh") === "1";
+  if (!force && cached && Date.now() - cached.at < TTL_MS) return NextResponse.json(cached.payload);
 
   // Cold instance: fall back to the on-disk snapshot. Rebuilding costs ~25s
   // (5 pie-detail calls at 1 req/5s), so serve what we have and refresh behind
   // the response rather than making the dashboard wait for it.
-  const disk = await readDiskCache<PiesPayload>(DISK_FILE, TTL_MS);
+  const disk = force ? null : await readDiskCache<PiesPayload>(DISK_FILE, TTL_MS);
   if (disk && disk.ageMs < STALE_SERVE_MS) {
     cached = { payload: disk.value, at: Date.now() - disk.ageMs };
     if (!disk.fresh) after(() => refreshOnce(DISK_FILE, loadPies).catch(() => undefined));
