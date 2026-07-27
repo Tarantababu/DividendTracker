@@ -26,15 +26,62 @@ export class T212Error extends Error {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** GET against the T212 API with 429 backoff. `pathname` starts with /api/v0/... */
-async function t212Get<T>(pathname: string, maxRetries = 6): Promise<T> {
+/**
+ * Trading212 publishes its limits on every response:
+ *   x-ratelimit-limit / -period / -remaining / -reset
+ * We track them per endpoint class and wait exactly as long as the API says,
+ * instead of discovering the limit by getting a 429 and sleeping a flat 11s.
+ * That flat sleep was the single biggest source of latency: five pie-detail
+ * calls cost ~55s of pure backoff.
+ */
+interface RateState {
+  /** unix ms when the current window resets */
+  resetAt: number;
+  remaining: number;
+  /** serialises calls within one endpoint class */
+  chain: Promise<unknown>;
+}
+const rateStates = ((globalThis as Record<string, unknown>).__t212Rate ??= new Map<string, RateState>()) as Map<string, RateState>;
+
+/** Group by endpoint shape so ids don't fragment the budget: /pies/123 → /pies/:id */
+function rateKey(pathname: string): string {
+  return pathname.split("?")[0].replace(/\/\d+(?=\/|$)/g, "/:id");
+}
+
+function stateFor(key: string): RateState {
+  let s = rateStates.get(key);
+  if (!s) {
+    s = { resetAt: 0, remaining: 1, chain: Promise.resolve() };
+    rateStates.set(key, s);
+  }
+  return s;
+}
+
+async function requestOnce<T>(pathname: string, key: string, maxRetries: number): Promise<T> {
+  const st = stateFor(key);
   for (let attempt = 0; ; attempt++) {
-    const res = await fetch(`${HOST}${pathname}`, {
-      headers: { Authorization: authHeader() },
-      cache: "no-store",
-    });
+    // Proactive wait: the previous response already told us the window is spent.
+    const waitMs = st.remaining <= 0 ? st.resetAt - Date.now() : 0;
+    if (waitMs > 0) await sleep(Math.min(waitMs + 120, 30_000));
+
+    const res = await fetch(`${HOST}${pathname}`, { headers: { Authorization: authHeader() }, cache: "no-store" });
+
+    // Record what the API just told us about the budget.
+    const remaining = Number(res.headers.get("x-ratelimit-remaining"));
+    const resetSec = Number(res.headers.get("x-ratelimit-reset"));
+    const period = Number(res.headers.get("x-ratelimit-period"));
+    if (Number.isFinite(remaining)) st.remaining = remaining;
+    if (Number.isFinite(resetSec) && resetSec > 0) st.resetAt = resetSec * 1000;
+    else if (Number.isFinite(period) && period > 0) st.resetAt = Date.now() + period * 1000;
+
     if (res.status === 429) {
       if (attempt >= maxRetries) throw new T212Error("RATE_LIMITED", `Rate limited on ${pathname} after ${maxRetries} retries`);
-      await sleep(11_000);
+      const retryAfter = Number(res.headers.get("retry-after"));
+      const until = Number.isFinite(retryAfter) && retryAfter > 0 ? Date.now() + retryAfter * 1000 : st.resetAt;
+      // Fall back to a short exponential backoff only when the API said nothing.
+      const ms = until > Date.now() ? until - Date.now() + 150 : Math.min(1000 * 2 ** attempt, 8000);
+      st.remaining = 0;
+      await sleep(Math.min(ms, 30_000));
       continue;
     }
     if (res.status === 401 || res.status === 403) {
@@ -45,6 +92,22 @@ async function t212Get<T>(pathname: string, maxRetries = 6): Promise<T> {
     }
     return (await res.json()) as T;
   }
+}
+
+/**
+ * GET against the T212 API. Calls to the same endpoint class are serialised so
+ * concurrent callers queue behind one another rather than all racing into a 429.
+ */
+async function t212Get<T>(pathname: string, maxRetries = 6): Promise<T> {
+  const key = rateKey(pathname);
+  const st = stateFor(key);
+  const run = st.chain.then(
+    () => requestOnce<T>(pathname, key, maxRetries),
+    () => requestOnce<T>(pathname, key, maxRetries),
+  );
+  // Keep the chain alive even if this call rejects, so one failure doesn't wedge the queue.
+  st.chain = run.catch(() => undefined);
+  return run;
 }
 
 export async function getAccountSummary(): Promise<AccountSummary> {

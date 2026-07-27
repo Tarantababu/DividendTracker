@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import fs from "fs/promises";
 import path from "path";
 import { getPositions, syncOrders, T212Error } from "@/lib/t212";
+import { readDiskCache, refreshOnce } from "@/lib/diskCache";
 import { prettyTicker } from "@/lib/analytics";
 import { CACHE_DIR } from "@/lib/cacheDir";
 import type { Position } from "@/lib/types";
@@ -167,19 +168,38 @@ async function fxSeries(cur: string): Promise<Map<string, number> | null> {
 
 const dateOf = (t: number) => new Date(t * 1000).toISOString().slice(0, 10);
 
+const DISK_FILE = "portfolio-history-snapshot.json";
+const STALE_SERVE_MS = 24 * 60 * 60 * 1000;
+
 export async function GET(req: NextRequest) {
   const force = req.nextUrl.searchParams.get("refresh") === "1";
   if (!force && memo.__phResult && Date.now() - memo.__phResult.at < RESULT_TTL_MS) {
     return NextResponse.json(memo.__phResult.payload);
   }
 
-  let positions: Position[];
+  // The reconstruction is the app's most expensive call: on a cold instance it
+  // syncs the full order history and pulls a year of prices for every holding.
+  // Serve the last snapshot immediately and rebuild behind the response.
+  if (!force) {
+    const disk = await readDiskCache<PortfolioHistoryPayload>(DISK_FILE, RESULT_TTL_MS);
+    if (disk && disk.ageMs < STALE_SERVE_MS) {
+      memo.__phResult = { at: Date.now() - disk.ageMs, payload: disk.value };
+      if (!disk.fresh) after(() => refreshOnce(DISK_FILE, () => rebuild()).catch(() => undefined));
+      return NextResponse.json(disk.value);
+    }
+  }
+
   try {
-    positions = await getPositions();
+    return NextResponse.json(await refreshOnce(DISK_FILE, () => rebuild()));
   } catch (err) {
     if (err instanceof T212Error) return NextResponse.json({ error: err.code, message: err.message }, { status: err.code === "NO_CREDENTIALS" ? 428 : 502 });
     return NextResponse.json({ error: "UNKNOWN", message: String(err) }, { status: 500 });
   }
+}
+
+/** The full reconstruction. Throws on failure so callers can decide how to degrade. */
+async function rebuild(): Promise<PortfolioHistoryPayload> {
+  const positions: Position[] = await getPositions();
 
   const symbolMap = await loadSymbolMap();
   const mapSizeBefore = Object.keys(symbolMap).length;
@@ -376,5 +396,5 @@ export async function GET(req: NextRequest) {
     approximate: true,
   };
   memo.__phResult = { at: Date.now(), payload };
-  return NextResponse.json(payload);
+  return payload;
 }

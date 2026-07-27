@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { getPies, T212Error, type PieSummary } from "@/lib/t212";
+import { readDiskCache, refreshOnce } from "@/lib/diskCache";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -33,14 +34,30 @@ function loadPies(): Promise<PiesPayload> {
   return inFlight;
 }
 
+const DISK_FILE = "pies-snapshot.json";
+const STALE_SERVE_MS = 24 * 60 * 60 * 1000; // a day-old snapshot still beats a 25s wait
+
 export async function GET() {
   if (cached && Date.now() - cached.at < TTL_MS) return NextResponse.json(cached.payload);
+
+  // Cold instance: fall back to the on-disk snapshot. Rebuilding costs ~25s
+  // (5 pie-detail calls at 1 req/5s), so serve what we have and refresh behind
+  // the response rather than making the dashboard wait for it.
+  const disk = await readDiskCache<PiesPayload>(DISK_FILE, TTL_MS);
+  if (disk && disk.ageMs < STALE_SERVE_MS) {
+    cached = { payload: disk.value, at: Date.now() - disk.ageMs };
+    if (!disk.fresh) after(() => refreshOnce(DISK_FILE, loadPies).catch(() => undefined));
+    return NextResponse.json(disk.fresh ? disk.value : { ...disk.value, stale: true });
+  }
+
   try {
-    return NextResponse.json(await loadPies());
+    const payload = await refreshOnce(DISK_FILE, loadPies);
+    return NextResponse.json(payload);
   } catch (err) {
     // A transient rate-limit shouldn't blank the UI: serve the last good snapshot
     // if we have one, even past its TTL. Only error out on a genuine cold failure.
     if (cached) return NextResponse.json({ ...cached.payload, stale: true });
+    if (disk) return NextResponse.json({ ...disk.value, stale: true });
     if (err instanceof T212Error) {
       return NextResponse.json({ error: err.code, message: err.message }, { status: err.code === "MISSING_CREDENTIALS" ? 428 : 502 });
     }
