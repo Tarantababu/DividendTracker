@@ -2,7 +2,7 @@ import { NextRequest, NextResponse, after } from "next/server";
 import fs from "fs/promises";
 import path from "path";
 import { getPositions, syncOrders, T212Error } from "@/lib/t212";
-import { readDiskCache, refreshOnce } from "@/lib/diskCache";
+import { readDiskCache, refreshOnce, writeDiskCache } from "@/lib/diskCache";
 import { prettyTicker } from "@/lib/analytics";
 import { CACHE_DIR } from "@/lib/cacheDir";
 import type { Position } from "@/lib/types";
@@ -84,8 +84,17 @@ async function saveSymbolMap(map: Record<string, string>) {
 async function resolveChart(p: Position, map: Record<string, string>): Promise<{ symbol: string; chart: ChartSeries } | null> {
   const key = p.instrument.ticker;
   const guess = prettyTicker(key);
+
+  // Fast path: we already know this ticker's Yahoo symbol. Previously the search
+  // below ran regardless and the cached symbol was merely the first candidate,
+  // so every rebuild paid ~one search per holding for nothing.
+  const known = map[key];
+  if (known) {
+    const chart = await fetchChart(known);
+    if (chart && chart.closes.some((c) => c != null)) return { symbol: known, chart };
+  }
+
   const candidates: string[] = [];
-  if (map[key]) candidates.push(map[key]);
 
   try {
     const res = await fetch(
@@ -104,9 +113,13 @@ async function resolveChart(p: Position, map: Record<string, string>): Promise<{
   // last resort: the bare guess and common European exchange suffixes
   candidates.push(guess, `${guess}.DE`, `${guess}.L`, `${guess}.AS`, `${guess}.PA`, `${guess}.MI`);
 
+  // Bounded: an unresolvable holding used to try every suffix in series, so a
+  // cold instance could spend minutes failing across 18 holdings.
   const seen = new Set<string>();
+  let tried = 0;
   for (const symbol of candidates) {
     if (!symbol || seen.has(symbol)) continue;
+    if (++tried > 4) break;
     seen.add(symbol);
     const chart = await fetchChart(symbol);
     if (chart && chart.closes.some((c) => c != null)) {
@@ -116,6 +129,30 @@ async function resolveChart(p: Position, map: Record<string, string>): Promise<{
   }
   delete map[key];
   return null;
+}
+
+// Daily closes only change once a day, so they survive on disk. Without this a
+// cold instance re-downloaded a year of prices for every holding.
+const CHART_DISK_FILE = "yahoo-charts.json";
+const CHART_DISK_TTL_MS = 6 * 60 * 60 * 1000;
+let chartDiskLoaded = false;
+let chartDiskDirty = false;
+
+async function loadChartDisk(): Promise<void> {
+  if (chartDiskLoaded) return;
+  chartDiskLoaded = true;
+  const disk = await readDiskCache<Record<string, { at: number; series: ChartSeries }>>(CHART_DISK_FILE, Number.MAX_SAFE_INTEGER);
+  for (const [symbol, entry] of Object.entries(disk?.value ?? {})) {
+    if (entry?.series && Date.now() - entry.at < CHART_DISK_TTL_MS) memo.__phCharts!.set(symbol, entry);
+  }
+}
+
+async function saveChartDisk(): Promise<void> {
+  if (!chartDiskDirty) return;
+  chartDiskDirty = false;
+  const out: Record<string, { at: number; series: ChartSeries }> = {};
+  for (const [symbol, entry] of memo.__phCharts!) out[symbol] = entry;
+  await writeDiskCache(CHART_DISK_FILE, out);
 }
 
 async function fetchChart(symbol: string): Promise<ChartSeries | null> {
@@ -146,6 +183,7 @@ async function fetchChart(symbol: string): Promise<ChartSeries | null> {
       price: r.meta.regularMarketPrice ?? null,
     };
     memo.__phCharts!.set(symbol, { at: Date.now(), series });
+    chartDiskDirty = true;
     return series;
   } catch {
     return null;
@@ -199,6 +237,7 @@ export async function GET(req: NextRequest) {
 
 /** The full reconstruction. Throws on failure so callers can decide how to degrade. */
 async function rebuild(): Promise<PortfolioHistoryPayload> {
+  await loadChartDisk();
   const positions: Position[] = await getPositions();
 
   const symbolMap = await loadSymbolMap();
@@ -396,5 +435,6 @@ async function rebuild(): Promise<PortfolioHistoryPayload> {
     approximate: true,
   };
   memo.__phResult = { at: Date.now(), payload };
+  await saveChartDisk();
   return payload;
 }
