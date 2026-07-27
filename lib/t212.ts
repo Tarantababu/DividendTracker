@@ -4,6 +4,7 @@ import type { AccountSummary, DividendItem, DividendsPayload, Position } from ".
 
 const HOST = process.env.T212_HOST ?? "https://live.trading212.com";
 import { CACHE_DIR } from "./cacheDir";
+import { readDiskCache, writeDiskCache } from "./diskCache";
 const DIVIDENDS_CACHE = path.join(CACHE_DIR, "dividends.json");
 
 function authHeader(): string {
@@ -181,17 +182,84 @@ interface PieDetail {
   instruments: Array<{ ticker: string; ownedQuantity: number; currentShare: number; result?: { priceAvgValue?: number; priceAvgInvestedValue?: number } }>;
 }
 
+// ---- Pie detail cache ------------------------------------------------------
+// The list endpoint returns every money figure (value, invested, result,
+// dividends, cash) in ONE request. The per-pie detail endpoint only adds the
+// pie's name and its instrument mix — things that change when you edit a pie,
+// not when prices move. Since detail calls are rate-limited to ~1 per 5s, they
+// dominate the refresh cost (5 pies ≈ 25s). So we cache them and re-read only
+// the list on a normal refresh, which makes a refresh a single fast call.
+const PIE_DETAIL_FILE = "pie-details.json";
+const PIE_DETAIL_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+
+interface CachedPieDetail {
+  at: number;
+  name: string;
+  instruments: PieInstrument[];
+}
+
+/**
+ * Instrument values are price-sensitive, so a cached set drifts from the pie's
+ * fresh total. Their *proportions* drift far more slowly, and proportions are all
+ * the app uses them for (splitting a ticker held in several pies). Rescaling the
+ * cached instruments onto the fresh total keeps both the ratios and the absolute
+ * figures consistent.
+ */
+function rescaleInstruments(instruments: PieInstrument[], freshValue: number, freshInvested: number): PieInstrument[] {
+  const sumValue = instruments.reduce((a, i) => a + i.value, 0);
+  const sumInvested = instruments.reduce((a, i) => a + i.invested, 0);
+  const kv = sumValue > 0 && freshValue > 0 ? freshValue / sumValue : 1;
+  const ki = sumInvested > 0 && freshInvested > 0 ? freshInvested / sumInvested : 1;
+  return instruments.map((i) => ({ ...i, value: i.value * kv, invested: i.invested * ki }));
+}
+
 /**
  * All pies with their holdings — the authoritative per-category split, since a
  * shared ticker's real share of each pie is exact here (no proportional guessing).
- * One list call + one detail call per pie; paced by the shared 429 backoff.
+ *
+ * Always one list call for the live numbers; detail calls only for pies whose
+ * cached instrument mix is missing or older than `detailMaxAgeMs`.
  */
-export async function getPies(): Promise<PieSummary[]> {
-  const [list, overrides] = await Promise.all([t212Get<PieListItem[]>("/api/v0/equity/pies"), loadNetDepositOverrides()]);
+export async function getPies(opts: { detailMaxAgeMs?: number } = {}): Promise<PieSummary[]> {
+  const maxAge = opts.detailMaxAgeMs ?? PIE_DETAIL_MAX_AGE_MS;
+  const [list, overrides, cacheRead] = await Promise.all([
+    t212Get<PieListItem[]>("/api/v0/equity/pies"),
+    loadNetDepositOverrides(),
+    readDiskCache<Record<string, CachedPieDetail>>(PIE_DETAIL_FILE, Number.MAX_SAFE_INTEGER),
+  ]);
+  const details: Record<string, CachedPieDetail> = { ...(cacheRead?.value ?? {}) };
+
   const out: PieSummary[] = [];
+  let cacheDirty = false;
   for (const p of list) {
-    const detail = await t212Get<PieDetail>(`/api/v0/equity/pies/${p.id}`);
-    const name = detail.settings?.name ?? `Pie ${p.id}`;
+    const key = String(p.id);
+    let entry = details[key];
+
+    // Only pay for a detail call when we have nothing cached or it's gone stale.
+    if (!entry || Date.now() - entry.at > maxAge) {
+      try {
+        const detail = await t212Get<PieDetail>(`/api/v0/equity/pies/${p.id}`);
+        entry = {
+          at: Date.now(),
+          name: detail.settings?.name ?? `Pie ${p.id}`,
+          instruments: (detail.instruments ?? []).map((i) => ({
+            ticker: i.ticker,
+            value: i.result?.priceAvgValue ?? 0,
+            invested: i.result?.priceAvgInvestedValue ?? 0,
+            ownedQuantity: i.ownedQuantity,
+            currentShare: i.currentShare,
+          })),
+        };
+        details[key] = entry;
+        cacheDirty = true;
+      } catch (err) {
+        // Rate-limited or transient: an old mix rescaled onto fresh totals is far
+        // better than dropping the pie's composition entirely.
+        if (!entry) throw err;
+      }
+    }
+
+    const name = entry.name;
     out.push({
       id: p.id,
       name,
@@ -203,15 +271,11 @@ export async function getPies(): Promise<PieSummary[]> {
       resultCoef: p.result.priceAvgResultCoef,
       dividendGained: p.dividendDetails?.gained ?? 0,
       cash: p.cash ?? 0,
-      instruments: (detail.instruments ?? []).map((i) => ({
-        ticker: i.ticker,
-        value: i.result?.priceAvgValue ?? 0,
-        invested: i.result?.priceAvgInvestedValue ?? 0,
-        ownedQuantity: i.ownedQuantity,
-        currentShare: i.currentShare,
-      })),
+      instruments: rescaleInstruments(entry.instruments, p.result.priceAvgValue, p.result.priceAvgInvestedValue),
     });
   }
+
+  if (cacheDirty) await writeDiskCache(PIE_DETAIL_FILE, details);
   return out;
 }
 
