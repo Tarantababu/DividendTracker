@@ -8,6 +8,7 @@ import type { TickerDividendStats } from "@/lib/analytics";
 import type { DividendItem, Position } from "@/lib/types";
 import { CATEGORY_COLORS, piesByCategoryName, pieValueByTicker, normalizePieName, tickerSplits, useLiveCategories, usePies, type PieLike } from "@/lib/allocation";
 import { openHistory } from "@/components/HistoryModal";
+import NetDepositsEditor from "@/components/NetDepositsEditor";
 import type { HoldingSeries } from "@/app/api/portfolio-history/route";
 
 interface HistoryPayload {
@@ -86,6 +87,7 @@ export default function CategoryBreakdown({
   accountNetDeposits?: number | null;
 }) {
   const [data, setData] = useState<HistoryPayload | null>(null);
+  const [editing, setEditing] = useState(false);
   const pies = usePies(piesProp); // exact per-category actuals; seeded from /api/overview when present
   const categories = useLiveCategories(pies); // categories derived live from the T212 pies
 
@@ -225,11 +227,22 @@ export default function CategoryBreakdown({
 
   return (
     <section className="rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5">
-      <div className="mb-4">
-        <h2 className="text-sm font-semibold tracking-wide">Category performance</h2>
-        <p className="mt-0.5 text-xs text-muted-2">
-          Value vs invested, income and yields per category — history reconstructed from your order fills{data ? "" : " (loading…)"}
-        </p>
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold tracking-wide">Category performance</h2>
+          <p className="mt-0.5 text-xs text-muted-2">
+            Value vs invested, income and yields per category — history reconstructed from your order fills{data ? "" : " (loading…)"}
+          </p>
+        </div>
+        {pies && pies.length > 0 && (
+          <button
+            onClick={() => setEditing(true)}
+            title="Trading212 doesn't expose net deposits per pie, so they're kept here — update them when you deposit"
+            className="shrink-0 rounded-md border border-border px-2.5 py-1 text-[11px] font-medium text-muted transition-colors hover:bg-card-hover hover:text-foreground"
+          >
+            Edit invested
+          </button>
+        )}
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         {stats.map((s) => {
@@ -315,6 +328,8 @@ export default function CategoryBreakdown({
           </div>
         );
       })()}
+
+      {pies && <NetDepositsEditor pies={pies} currency={currency} open={editing} onClose={() => setEditing(false)} />}
 
       <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px] text-muted-2">
         <span className="flex items-center gap-1.5">

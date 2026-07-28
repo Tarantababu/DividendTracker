@@ -148,18 +148,22 @@ export interface PieSummary {
  * from order history (dividend reinvestments are untaggable). So the real figures are
  * read from .cache/net-deposits.json (keyed by exact pie name), maintained by hand.
  */
-async function loadNetDepositOverrides(): Promise<Record<string, number>> {
+export const NET_DEPOSITS_STORE = "net-deposits-store.json";
+
+export async function loadNetDepositOverrides(): Promise<Record<string, number>> {
   const out: Record<string, number> = {};
   const merge = (parsed: Record<string, unknown>) => {
-    for (const [k, v] of Object.entries(parsed)) if (typeof v === "number") out[k] = v;
+    for (const [k, v] of Object.entries(parsed)) if (typeof v === "number" && Number.isFinite(v)) out[k] = v;
   };
-  // Local file (gitignored, private) for local dev.
+  // Lowest precedence first, so each layer can override the one before it.
+
+  // 1. Local file (gitignored, private) for local dev.
   try {
     merge(JSON.parse(await fs.readFile(path.join(CACHE_DIR, "net-deposits.json"), "utf8")));
   } catch {
     /* no file */
   }
-  // Env var (JSON) so the deployed app can have them without committing to a public repo.
+  // 2. Env var (JSON) so the deployed app has a seed without committing to a public repo.
   if (process.env.PIE_NET_DEPOSITS) {
     try {
       merge(JSON.parse(process.env.PIE_NET_DEPOSITS));
@@ -167,6 +171,13 @@ async function loadNetDepositOverrides(): Promise<Record<string, number>> {
       /* malformed env */
     }
   }
+  // 3. Values saved from the app itself. These win: they're the ones the user
+  //    edited most recently, and unlike the env var they need no redeploy. Stored
+  //    via the disk cache, so on Vercel they're mirrored to Blob and survive cold
+  //    starts (a plain /tmp write would vanish with the instance).
+  const saved = await readDiskCache<Record<string, number>>(NET_DEPOSITS_STORE, Number.MAX_SAFE_INTEGER);
+  if (saved?.value) merge(saved.value);
+
   return out;
 }
 
