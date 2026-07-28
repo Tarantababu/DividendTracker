@@ -103,6 +103,37 @@ export async function writeDiskCache<T>(name: string, value: T): Promise<void> {
   if (USE_BLOB) await blobWrite(name, entry);
 }
 
+/**
+ * Route-level in-memory snapshots, registered by name so another route can drop
+ * them. Route files can only export handlers, so a shared registry is how one
+ * route invalidates another's memory cache.
+ */
+const memoryCaches = ((globalThis as Record<string, unknown>).__memoryCaches ??= new Map<string, unknown>()) as Map<string, unknown>;
+export const memGet = <T>(name: string): T | null => (memoryCaches.get(name) as T | undefined) ?? null;
+export const memSet = <T>(name: string, value: T): void => void memoryCaches.set(name, value);
+
+/**
+ * Drop a cached entry everywhere it lives — memory, /tmp and Blob. Needed when the
+ * inputs to a snapshot change (e.g. editing net deposits): without this the stale
+ * snapshot keeps being served for its whole stale-serve window and the edit looks
+ * like it did nothing.
+ */
+export async function deleteDiskCache(name: string): Promise<void> {
+  memoryCaches.delete(name);
+  try {
+    await fs.unlink(path.join(CACHE_DIR, name));
+  } catch {
+    /* nothing local */
+  }
+  if (!USE_BLOB) return;
+  try {
+    const { del } = await import("@vercel/blob");
+    await del(BLOB_PREFIX + name);
+  } catch {
+    /* best effort */
+  }
+}
+
 /** Guard so concurrent requests on one instance trigger a single refresh. */
 const inFlight = ((globalThis as Record<string, unknown>).__diskCacheInFlight ??= new Map<string, Promise<unknown>>()) as Map<string, Promise<unknown>>;
 

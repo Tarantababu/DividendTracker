@@ -150,6 +150,20 @@ export interface PieSummary {
  */
 export const NET_DEPOSITS_STORE = "net-deposits-store.json";
 
+/**
+ * Re-apply the current net-deposit overrides to an already-built pie list.
+ *
+ * These are a cheap name→number lookup, so they must NOT be frozen into the
+ * cached pie snapshot: a snapshot can be minutes or hours old, and a background
+ * refresh that started before an edit will happily overwrite any invalidation we
+ * do (measured: a stale rebuild landed 210ms after the cache was cleared).
+ * Applying them on the way out makes an edit take effect immediately and removes
+ * the race entirely.
+ */
+export function applyNetDeposits(pies: PieSummary[], overrides: Record<string, number>): PieSummary[] {
+  return pies.map((p) => ({ ...p, netDeposits: overrides[p.name] ?? p.invested }));
+}
+
 export async function loadNetDepositOverrides(): Promise<Record<string, number>> {
   const out: Record<string, number> = {};
   const merge = (parsed: Record<string, unknown>) => {

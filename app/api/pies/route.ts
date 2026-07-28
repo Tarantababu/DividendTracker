@@ -1,6 +1,6 @@
 import { NextResponse, NextRequest, after } from "next/server";
-import { getPies, T212Error, type PieSummary } from "@/lib/t212";
-import { readDiskCache, refreshOnce } from "@/lib/diskCache";
+import { applyNetDeposits, getPies, loadNetDepositOverrides, T212Error, type PieSummary } from "@/lib/t212";
+import { readDiskCache, refreshOnce, memGet, memSet } from "@/lib/diskCache";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -12,7 +12,11 @@ export interface PiesPayload {
 
 // Pies change slowly; a short in-memory cache absorbs client re-fetches and keeps
 // us well under the pies-endpoint rate limit (list + one detail call per pie).
-let cached: { payload: PiesPayload; at: number } | null = null;
+// Registered by name so /api/net-deposits can invalidate it after an edit.
+type Cached = { payload: PiesPayload; at: number };
+const MEM = "pies-snapshot.json";
+const getCached = () => memGet<Cached>(MEM);
+const setCached = (c: Cached) => memSet(MEM, c);
 let inFlight: Promise<PiesPayload> | null = null;
 const TTL_MS = 5 * 60 * 1000;
 
@@ -25,7 +29,7 @@ function loadPies(detailMaxAgeMs?: number): Promise<PiesPayload> {
     try {
       const pies = await getPies({ detailMaxAgeMs });
       const payload: PiesPayload = { pies, fetchedAt: new Date().toISOString() };
-      cached = { payload, at: Date.now() };
+      setCached({ payload, at: Date.now() });
       return payload;
     } finally {
       inFlight = null;
@@ -37,22 +41,30 @@ function loadPies(detailMaxAgeMs?: number): Promise<PiesPayload> {
 const DISK_FILE = "pies-snapshot.json";
 const STALE_SERVE_MS = 24 * 60 * 60 * 1000; // a day-old snapshot still beats a 25s wait
 
+/** Always answer with the CURRENT overrides, regardless of how old the cached
+ *  pie payload is — see applyNetDeposits for why this can't be baked in. */
+async function withCurrentDeposits(payload: PiesPayload & { stale?: boolean }): Promise<PiesPayload & { stale?: boolean }> {
+  const overrides = await loadNetDepositOverrides();
+  return { ...payload, pies: applyNetDeposits(payload.pies, overrides) };
+}
+
 export async function GET(req: NextRequest) {
   // ?refresh=1 — the user explicitly asked for fresh numbers, so skip every cache
   // and pay the rebuild.
   const refresh = req.nextUrl.searchParams.get("refresh");
   const force = refresh === "1" || refresh === "full";
   const full = refresh === "full";
-  if (!force && cached && Date.now() - cached.at < TTL_MS) return NextResponse.json(cached.payload);
+  const mem = getCached();
+  if (!force && mem && Date.now() - mem.at < TTL_MS) return NextResponse.json(await withCurrentDeposits(mem.payload));
 
   // Cold instance: fall back to the on-disk snapshot. Rebuilding costs ~25s
   // (5 pie-detail calls at 1 req/5s), so serve what we have and refresh behind
   // the response rather than making the dashboard wait for it.
   const disk = force ? null : await readDiskCache<PiesPayload>(DISK_FILE, TTL_MS);
   if (disk && disk.ageMs < STALE_SERVE_MS) {
-    cached = { payload: disk.value, at: Date.now() - disk.ageMs };
+    setCached({ payload: disk.value, at: Date.now() - disk.ageMs });
     if (!disk.fresh) after(() => refreshOnce(DISK_FILE, loadPies).catch(() => undefined));
-    return NextResponse.json(disk.fresh ? disk.value : { ...disk.value, stale: true });
+    return NextResponse.json(await withCurrentDeposits(disk.fresh ? disk.value : { ...disk.value, stale: true }));
   }
 
   try {
@@ -61,12 +73,13 @@ export async function GET(req: NextRequest) {
     // ?refresh=full also re-reads every pie's name and holdings (one rate-limited
     // call per pie, ~25s), for when a pie has been renamed or edited in T212.
     const payload = await refreshOnce(DISK_FILE, () => loadPies(full ? 0 : undefined));
-    return NextResponse.json(payload);
+    return NextResponse.json(await withCurrentDeposits(payload));
   } catch (err) {
     // A transient rate-limit shouldn't blank the UI: serve the last good snapshot
     // if we have one, even past its TTL. Only error out on a genuine cold failure.
-    if (cached) return NextResponse.json({ ...cached.payload, stale: true });
-    if (disk) return NextResponse.json({ ...disk.value, stale: true });
+    const fallback = getCached();
+    if (fallback) return NextResponse.json(await withCurrentDeposits({ ...fallback.payload, stale: true }));
+    if (disk) return NextResponse.json(await withCurrentDeposits({ ...disk.value, stale: true }));
     if (err instanceof T212Error) {
       return NextResponse.json({ error: err.code, message: err.message }, { status: err.code === "MISSING_CREDENTIALS" ? 428 : 502 });
     }

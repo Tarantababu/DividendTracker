@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { loadNetDepositOverrides, NET_DEPOSITS_STORE } from "@/lib/t212";
-import { readDiskCache, writeDiskCache } from "@/lib/diskCache";
+import { readDiskCache, writeDiskCache, deleteDiskCache } from "@/lib/diskCache";
 
 export const dynamic = "force-dynamic";
 
@@ -44,5 +44,13 @@ export async function PUT(req: NextRequest) {
   const existing = (await readDiskCache<Record<string, number>>(NET_DEPOSITS_STORE, Number.MAX_SAFE_INTEGER))?.value ?? {};
   const merged = { ...existing, ...clean };
   await writeDiskCache(NET_DEPOSITS_STORE, merged);
+
+  // Net deposits are an INPUT to the pies and overview snapshots, so those are now
+  // wrong. Without dropping them the old figures keep being served for the whole
+  // stale-serve window and the edit looks like it did nothing.
+  // deleteDiskCache clears the in-memory registry entry too, so the next request
+  // rebuilds from the new overrides on this instance and on any other.
+  await Promise.all([deleteDiskCache("pies-snapshot.json"), deleteDiskCache("overview-snapshot.json")]);
+
   return NextResponse.json({ ok: true, values: await loadNetDepositOverrides() });
 }

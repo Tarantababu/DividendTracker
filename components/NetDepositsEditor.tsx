@@ -52,10 +52,15 @@ export default function NetDepositsEditor({
         setError(j.message ?? "Could not save.");
         return;
       }
-      // Pies are cached client-side and server-side; drop both so the new numbers
-      // show immediately rather than after the next cache expiry.
+      // The server already dropped its pies/overview snapshots. Clear the client's
+      // caches too — the dashboard repaints from a sessionStorage snapshot, which
+      // would otherwise put the old figures straight back on screen.
       invalidatePies();
-      await fetch("/api/pies?refresh=1").catch(() => {});
+      try {
+        sessionStorage.removeItem("dividend-tracker-snapshot-v1");
+      } catch {
+        /* storage unavailable — the reload still refetches */
+      }
       onClose();
       window.location.reload();
     } catch {
