@@ -165,22 +165,27 @@ export default function CategoryBreakdown({ positions, divStats, dividends, curr
       let divPtr = 0;
       let divRunning = 0;
 
-      // History: sum member value + cost series (this category's share) by date; add total-return line
+      // History: sum member value + cost series (this category's share) by date; add total-return line.
+      // The reconstruction tracks COST BASIS, but the card's "Invested" figure is real
+      // net deposits, so the raw line would end somewhere other than the number printed
+      // beside it. Scale it to land on `invested` — same shape, consistent endpoint.
+      const rawCosts = dates.map((_, idx) =>
+        members.reduce((a, { t, frac }) => a + ((seriesByTicker.get(t)?.costs[idx] ?? 0) * frac), 0),
+      );
+      const lastCost = [...rawCosts].reverse().find((c) => c > 0) ?? 0;
+      const costScale = lastCost > 0 && invested > 0 ? invested / lastCost : 1;
+
       const series: CatPoint[] = dates.map((date, idx) => {
         let v = 0;
-        let cost = 0;
         for (const { t, frac } of members) {
           const s = seriesByTicker.get(t);
-          if (s) {
-            v += (s.values[idx] ?? 0) * frac;
-            cost += (s.costs[idx] ?? 0) * frac;
-          }
+          if (s) v += (s.values[idx] ?? 0) * frac;
         }
         while (divPtr < memberDivs.length && memberDivs[divPtr].date <= date) divRunning += memberDivs[divPtr++].amount;
         return {
           date,
           value: Math.round(v * 100) / 100,
-          cost: Math.round(cost * 100) / 100,
+          cost: Math.round(rawCosts[idx] * costScale * 100) / 100,
           withDiv: Math.round((v + divRunning) * 100) / 100,
         };
       });

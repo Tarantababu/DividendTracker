@@ -115,6 +115,7 @@ export interface FireTargetInputs {
   fatMultiple: number; // Fat expenses multiple, e.g. 2
   baristaMonthlyIncome: number; // side income covering part of expenses
   coastYears: number; // years until you'd start drawing down
+  inflationPct?: number; // discounts the Coast target in real terms
 }
 
 /** The portfolio value each FIRE type requires. */
@@ -134,8 +135,10 @@ export function fireTarget(type: FireType, inp: FireTargetInputs): number {
       return annualExpenses / y; // value whose dividends equal annual expenses
     }
     case "coast": {
-      const r = inp.annualReturnPct / 100;
-      return regular / Math.pow(1 + r, Math.max(0, inp.coastYears)); // discount Regular back to today
+      // Discount at the REAL return: `regular` is in today's money, so compounding
+      // it back with a nominal rate would understate what you actually need now.
+      const real = (1 + inp.annualReturnPct / 100) / (1 + Math.max(0, inp.inflationPct ?? 0) / 100) - 1;
+      return regular / Math.pow(1 + real, Math.max(0, inp.coastYears));
     }
     default:
       return regular;
@@ -145,9 +148,18 @@ export function fireTarget(type: FireType, inp: FireTargetInputs): number {
 export interface FireInputs {
   currentValue: number;
   monthlyContribution: number;
-  annualReturnPct: number; // nominal total return
-  target: number; // required portfolio value (from fireTarget)
+  annualReturnPct: number; // nominal TOTAL return (price growth + dividends)
+  target: number; // required portfolio value (from fireTarget), in today's money
   incomeRatePct: number; // rate producing spendable income — SWR, or yield for Dividend FIRE
+  /** Annual inflation. The projection then runs in today's money: the target stays
+   *  comparable to today's expenses and the ETA is a real-terms answer. */
+  inflationPct?: number;
+  /** Portfolio dividend yield, the income slice of the total return. */
+  dividendYieldPct?: number;
+  /** Reinvest dividends (after tax) instead of taking them as cash. */
+  reinvestDividends?: boolean;
+  /** Tax withheld on distributions — German default is ~26.4%. */
+  dividendTaxPct?: number;
 }
 
 export interface FirePoint {
@@ -168,8 +180,22 @@ export interface FireProjection {
 export function projectFire(inp: FireInputs): FireProjection {
   const target = inp.target;
   const incomeRate = Math.max(0, inp.incomeRatePct) / 100;
-  const growthM = Math.pow(1 + inp.annualReturnPct / 100, 1 / 12);
   const maxMonths = 60 * 12;
+
+  // Everything below runs in TODAY'S money. Deflating the nominal return by
+  // inflation means the target (built from today's expenses) stays the right
+  // yardstick for decades out, instead of flattering the ETA.
+  const inflation = Math.max(0, inp.inflationPct ?? 0) / 100;
+  const totalReturn = inp.annualReturnPct / 100;
+  const dividendYield = Math.max(0, inp.dividendYieldPct ?? 0) / 100;
+  const reinvest = inp.reinvestDividends !== false; // default: reinvest
+  const divTax = Math.min(1, Math.max(0, (inp.dividendTaxPct ?? 0) / 100));
+
+  // The yield is the income slice OF the total return, so price growth is what's
+  // left. Splitting them is what lets reinvestment (and its tax drag) matter.
+  const priceReturn = Math.max(-0.99, totalReturn - dividendYield);
+  const realPriceGrowthM = Math.pow((1 + priceReturn) / (1 + inflation), 1 / 12);
+  const realDivRateM = dividendYield / 12 / (1 + inflation);
 
   let value = inp.currentValue;
   let contributed = 0;
@@ -179,7 +205,11 @@ export function projectFire(inp: FireInputs): FireProjection {
   let stopAt: number | null = monthsToTarget === 0 ? 12 : null;
 
   for (let m = 1; m <= maxMonths; m++) {
-    value = value * growthM + inp.monthlyContribution;
+    const dividends = value * realDivRateM;
+    value = value * realPriceGrowthM + inp.monthlyContribution;
+    // Reinvested dividends compound net of withholding; taken as cash they simply
+    // don't compound, which is exactly the drag this models.
+    if (reinvest) value += dividends * (1 - divTax);
     contributed += inp.monthlyContribution;
     if (monthsToTarget === null && value >= target) {
       monthsToTarget = m;

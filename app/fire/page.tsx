@@ -20,20 +20,26 @@ interface FireSettings {
   fatMultiple: number; // Fat expenses multiple
   baristaMonthlyIncome: number; // side income for Barista FIRE
   coastYears: number; // years until drawdown, for Coast FIRE
+  inflationPct: number; // projection runs in today's money
+  reinvestDividends: boolean; // compound dividends (net of tax) instead of spending them
+  dividendTaxPct: number; // withholding on distributions — German default
 }
 
-const FALLBACK_EXPENSES = 2500; // used only when neither N26 nor a user value is set
+const FALLBACK_EXPENSES = 4285; // used only when neither N26 nor a user value is set
 
 const DEFAULTS: FireSettings = {
   fireType: "regular",
-  monthlyExpenses: null,
-  withdrawalRatePct: 4,
-  annualReturnPct: null,
-  monthlyContribution: null,
+  monthlyExpenses: 4285,
+  withdrawalRatePct: 5,
+  annualReturnPct: 14,
+  monthlyContribution: 1400,
   leanPct: 60,
   fatMultiple: 2,
   baristaMonthlyIncome: 1000,
   coastYears: 15,
+  inflationPct: 2,
+  reinvestDividends: true,
+  dividendTaxPct: 26.375, // Kapitalertragsteuer + Soli
 };
 
 function num(v: string): number {
@@ -104,6 +110,7 @@ export default function FirePage() {
       fatMultiple: settings.fatMultiple,
       baristaMonthlyIncome: settings.baristaMonthlyIncome,
       coastYears: settings.coastYears,
+      inflationPct: settings.inflationPct,
     };
     const out = {} as Record<FireType, FireProjection>;
     for (const t of FIRE_TYPES) {
@@ -114,6 +121,10 @@ export default function FirePage() {
         annualReturnPct: effReturn,
         target,
         incomeRatePct: t.key === "dividend" ? yieldPct : settings.withdrawalRatePct,
+        inflationPct: settings.inflationPct,
+        dividendYieldPct: yieldPct,
+        reinvestDividends: settings.reinvestDividends,
+        dividendTaxPct: settings.dividendTaxPct,
       });
     }
     return out;
@@ -328,6 +339,18 @@ export default function FirePage() {
               />
             </label>
             <label className="block text-xs">
+              <span className="font-medium text-muted">Inflation (%/yr)</span>
+              <input
+                type="number"
+                min={0}
+                step={0.25}
+                value={settings.inflationPct}
+                onChange={(e) => setSettings((s) => ({ ...s, inflationPct: Math.max(0, num(e.target.value)) }))}
+                className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-1.5 text-sm"
+              />
+              <span className="mt-0.5 block text-[10px] text-muted-2">Everything is shown in today&apos;s money</span>
+            </label>
+            <label className="block text-xs">
               <span className="font-medium text-muted">Expected return (%/yr)</span>
               <input
                 type="number"
@@ -359,6 +382,26 @@ export default function FirePage() {
                 ) : (
                   <button className="underline" onClick={() => setSettings((s) => ({ ...s, monthlyContribution: null }))}>reset to auto</button>
                 )}
+              </span>
+            </label>
+            <label className="block text-xs">
+              <span className="font-medium text-muted">Dividends</span>
+              <button
+                type="button"
+                onClick={() => setSettings((s) => ({ ...s, reinvestDividends: !s.reinvestDividends }))}
+                className="mt-1 flex w-full items-center justify-between rounded-lg border border-border bg-surface px-3 py-1.5 text-sm"
+              >
+                <span>{settings.reinvestDividends ? "Reinvested" : "Taken as cash"}</span>
+                <span
+                  className={`relative h-4 w-7 shrink-0 rounded-full transition-colors ${settings.reinvestDividends ? "bg-[var(--accent)]" : "bg-border-strong"}`}
+                >
+                  <span className={`absolute top-0.5 size-3 rounded-full bg-white transition-all ${settings.reinvestDividends ? "left-3.5" : "left-0.5"}`} />
+                </span>
+              </button>
+              <span className="mt-0.5 block text-[10px] text-muted-2">
+                {settings.reinvestDividends
+                  ? `compounding after ${settings.dividendTaxPct}% German tax`
+                  : "spent, so they never compound"}
               </span>
             </label>
           </div>
