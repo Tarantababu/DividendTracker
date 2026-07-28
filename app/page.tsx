@@ -379,7 +379,7 @@ export default function Dashboard() {
         </div>
 
         <div className="mt-6 empty:hidden">
-          <CategoryBreakdown positions={positions} divStats={stats.divStats} dividends={dividends.items} currency={cur} pies={overview.pies} />
+          <CategoryBreakdown positions={positions} divStats={stats.divStats} dividends={dividends.items} currency={cur} pies={overview.pies} accountNetDeposits={netInvested} />
         </div>
 
         <div className="mt-6 grid gap-6 lg:grid-cols-2">
@@ -445,7 +445,7 @@ export default function Dashboard() {
           </Section>
         </div>
         <div className="mt-4">
-          <CategoryBreakdown positions={positions} divStats={stats.divStats} dividends={dividends.items} currency={cur} pies={overview.pies} />
+          <CategoryBreakdown positions={positions} divStats={stats.divStats} dividends={dividends.items} currency={cur} pies={overview.pies} accountNetDeposits={netInvested} />
         </div>
       </div>
 

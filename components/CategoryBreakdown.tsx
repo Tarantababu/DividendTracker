@@ -68,7 +68,23 @@ function MiniHistory({ series, color, currency }: { series: CatPoint[]; color: s
   );
 }
 
-export default function CategoryBreakdown({ positions, divStats, dividends, currency, pies: piesProp }: { positions: Position[]; divStats: TickerDividendStats[]; dividends: DividendItem[]; currency: string; pies?: PieLike[] }) {
+export default function CategoryBreakdown({
+  positions,
+  divStats,
+  dividends,
+  currency,
+  pies: piesProp,
+  accountNetDeposits,
+}: {
+  positions: Position[];
+  divStats: TickerDividendStats[];
+  dividends: DividendItem[];
+  currency: string;
+  pies?: PieLike[];
+  /** Account-level net deposits (the dashboard's "Invested" card). Passed in so
+   *  this section can show how the categories reconcile to it. */
+  accountNetDeposits?: number | null;
+}) {
   const [data, setData] = useState<HistoryPayload | null>(null);
   const pies = usePies(piesProp); // exact per-category actuals; seeded from /api/overview when present
   const categories = useLiveCategories(pies); // categories derived live from the T212 pies
@@ -278,6 +294,28 @@ export default function CategoryBreakdown({ positions, divStats, dividends, curr
           );
         })}
       </div>
+
+      {/* Categories only cover money inside pies. The dashboard's "Invested" card is
+          account-level net deposits, so the remainder is shown explicitly rather than
+          silently differing — or worse, scaling the real per-pie figures to fit. */}
+      {(() => {
+        if (accountNetDeposits == null) return null;
+        const categoriesTotal = stats.reduce((a, s) => a + s.invested, 0);
+        const outside = accountNetDeposits - categoriesTotal;
+        if (Math.abs(outside) < 1) return null;
+        return (
+          <div className="num mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-border-soft pt-3 text-[11px] text-muted-2">
+            <span>Categories {formatMoney(categoriesTotal, currency, 0)}</span>
+            <span>+</span>
+            <span title="Deposits not held in any pie: free cash, plus the effect of realised P/L on positions you've since sold">
+              outside pies {formatMoney(outside, currency, 0)}
+            </span>
+            <span>=</span>
+            <span className="font-medium text-muted">total invested {formatMoney(accountNetDeposits, currency, 0)}</span>
+          </div>
+        );
+      })()}
+
       <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px] text-muted-2">
         <span className="flex items-center gap-1.5">
           <span className="h-2 w-3 rounded-sm bg-[var(--primary)]/60" /> value
