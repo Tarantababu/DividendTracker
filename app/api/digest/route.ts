@@ -49,6 +49,9 @@ export interface DigestPayload {
   generatedAt: string;
   headline: string; // one-line take on the day
   mood: "risk-on" | "risk-off" | "mixed" | "quiet";
+  /** The lead narrative: today told as one connected story — what happened, why,
+   *  how it reached this portfolio, and what to expect. Paragraphs, not bullets. */
+  story: string[];
   education: LearnTopic[]; // daily macro lesson tied to what actually happened
   portfolio: {
     totalValue: number;
@@ -143,10 +146,11 @@ Your job: explain what happened today on BOTH scales — macro (world/markets) a
 
 This investor wants to LEARN macro every day, not just be told numbers. Lean into the macro side: explain mechanisms and trends, always in plain English, always tied to the actual data given.
 
-Return ONLY valid JSON (no markdown fence). Emit the keys in EXACTLY this order — headline, mood, sections, moverNotes, education — so the most important content is written first:
+Return ONLY valid JSON (no markdown fence). Emit the keys in EXACTLY this order — headline, mood, story, sections, moverNotes, education — so the most important content is written first:
 {
   "headline": "one punchy sentence (<=110 chars) summarising the day for this investor",
   "mood": "risk-on" | "risk-off" | "mixed" | "quiet",
+  "story": ["paragraph", "paragraph", "..."],
   "sections": [ /* see below */ ],
   "moverNotes": [ { "ticker": "AAPL", "why": "1-2 sentences: the most likely driver, tied to a headline or macro move given. Say 'no clear news — likely sector/market drift' when nothing explains it." } ],
   "education": [
@@ -159,7 +163,16 @@ Return ONLY valid JSON (no markdown fence). Emit the keys in EXACTLY this order 
   ]
 }
 
-The "sections" array (written FIRST, right after mood) is exactly these six, in order:
+"story" — THE STORY OF THE DAY. This is the lead the investor reads first, and often the only thing they read. Write 4-6 flowing paragraphs (roughly 55-90 words each) as ONE connected narrative, not a list of facts. Rules:
+- Prose only. No bullets, no headings, no bold, no emoji. Plain sentences a smart friend would say out loud.
+- Follow a causal chain and make every link explicit — this is a story, so it needs "because", "which meant", "so": what happened → WHY it happened (the driver in the headlines) → HOW it transmitted through markets (the actual mechanism: discounting, the dollar, risk appetite, sector rotation) → what it did to THIS portfolio and its categories → what to expect next and what would confirm or break that expectation.
+- Cover all four layers and connect them: macro (indices, rates, FX, crypto), news (the specific stories driving it), trends (where this sits in the 1w/1m/3m/1y picture and the 52-week range — is today noise or continuation?), and micro (their movers, dividends, categories).
+- Teach while narrating. When you use a term (duration, real yields, breadth, rotation), define it in half a sentence inline so the reader ends the piece understanding something they didn't before.
+- Be honest about uncertainty: distinguish what the data shows from what is a plausible read, and say when a move has no clear explanation. Never invent a cause.
+- End the final paragraph on what to watch next and why it matters to a long-horizon dividend investor. No advice to buy or sell.
+- Every number must come from the data given.
+
+The "sections" array is exactly these six, in order:
     { "heading": "Macro picture", "body": "..." },
     { "heading": "Trends & regime", "body": "..." },
     { "heading": "What moved your portfolio", "body": "..." },
@@ -341,6 +354,7 @@ export async function GET(req: NextRequest) {
       generatedAt: new Date().toISOString(),
       headline: "",
       mood: "quiet",
+      story: [],
       education: [],
       portfolio: {
         totalValue: summary.totalValue,
@@ -443,7 +457,7 @@ export async function GET(req: NextRequest) {
     let parsed: Record<string, unknown> | null = null;
     let degraded: string | null = null;
 
-    const first = await generate("claude-opus-4-8", 5000, 135_000);
+    const first = await generate("claude-opus-4-8", 6500, 135_000);
     parsed = salvageJson(first.text);
     if (parsed && !first.complete) degraded = "Written right up to the time limit, so the later sections may be shorter than usual.";
 
@@ -453,7 +467,7 @@ export async function GET(req: NextRequest) {
       // credit/auth problem will fail identically on the second model.
       const fatal = /credit balance is too low|authentication/i.test(String((first.error as { message?: string })?.message ?? ""));
       if (!fatal) {
-        const second = await generate("claude-sonnet-5", 5000, 90_000);
+        const second = await generate("claude-sonnet-5", 6500, 90_000);
         parsed = salvageJson(second.text);
         lastError = second.error ?? first.error;
         if (parsed) degraded = "Today's commentary was written by the faster model — the main one ran long.";
@@ -472,6 +486,7 @@ export async function GET(req: NextRequest) {
       const p = parsed as {
         headline?: string;
         mood?: DigestPayload["mood"];
+        story?: unknown;
         moverNotes?: { ticker: string; why: string }[];
         sections?: DigestSection[];
         education?: LearnTopic[];
@@ -479,6 +494,11 @@ export async function GET(req: NextRequest) {
       const whyBy = new Map((p.moverNotes ?? []).map((n) => [n.ticker, n.why]));
       base.headline = p.headline?.trim() || "Your daily portfolio and market digest.";
       base.mood = p.mood ?? "mixed";
+      // Accept either an array of paragraphs or one blob split on blank lines —
+      // a partial stream can hand back either shape.
+      base.story = (Array.isArray(p.story) ? p.story.map(String) : typeof p.story === "string" ? p.story.split(/\n{2,}/) : [])
+        .map((t) => t.trim())
+        .filter(Boolean);
       base.sections = (p.sections ?? []).filter((s) => s?.heading && s?.body);
       base.education = (p.education ?? [])
         .filter((t) => t?.concept && t?.explain)

@@ -273,6 +273,31 @@ export default function DigestPage() {
         )}
       </section>
 
+      {/* Story of the day — the lead read, so it sits above everything else and is
+          set at reading size rather than dashboard size. */}
+      {data.story?.length > 0 && (
+        <section className="mt-6 rounded-xl border border-border bg-card p-5 shadow-xs sm:p-7">
+          <div className="mb-3 flex items-baseline gap-2">
+            <h2 className="text-sm font-semibold tracking-wide">Story of the day</h2>
+            <span className="text-[11px] text-muted-2">what happened, why, and what it means</span>
+          </div>
+          <div className="max-w-[68ch] space-y-4">
+            {data.story.map((para, i) => (
+              <p
+                key={i}
+                className={
+                  i === 0
+                    ? "text-[15px] leading-relaxed text-foreground sm:text-base"
+                    : "text-sm leading-relaxed text-muted sm:text-[15px]"
+                }
+              >
+                {para}
+              </p>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Macro strip */}
       <section className="mt-6 rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5">
         <h2 className="text-sm font-semibold tracking-wide">Markets today</h2>
