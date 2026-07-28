@@ -122,10 +122,20 @@ function EventTooltip({
 export default function DailyStatus({ dividends, currency }: { dividends: DividendItem[]; currency: string }) {
   const [data, setData] = useState<HistoryPayload | null>(null);
   const [error, setError] = useState(false);
+  const [progress, setProgress] = useState(0.05);
   const [range, setRange] = useState<(typeof RANGES)[number]["label"]>("6M");
   const [triggered, setTriggered] = useState<TriggeredSignal[]>([]);
   const [events, setEvents] = useState<PortfolioEvent[]>([]);
   const [eventNotes, setEventNotes] = useState<string[]>([]);
+
+  // The reconstruction replays every order fill against historical prices, so on a
+  // cold cache it can take a while. Ease a bar toward 90% while it runs — there are
+  // no milestones to hook into, but silence for that long reads as "broken".
+  useEffect(() => {
+    if (data || error) return;
+    const t = setInterval(() => setProgress((p) => (p < 0.9 ? p + (0.9 - p) * 0.04 : p)), 400);
+    return () => clearInterval(t);
+  }, [data, error]);
 
   useEffect(() => {
     let cancelled = false;
@@ -134,7 +144,10 @@ export default function DailyStatus({ dividends, currency }: { dividends: Divide
         const res = await fetch("/api/portfolio-history");
         if (!res.ok) throw new Error();
         const payload = (await res.json()) as HistoryPayload;
-        if (!cancelled) setData(payload);
+        if (!cancelled) {
+          setProgress(1);
+          setData(payload);
+        }
       } catch {
         if (!cancelled) setError(true);
       }
@@ -246,7 +259,22 @@ export default function DailyStatus({ dividends, currency }: { dividends: Divide
         )}
       </div>
 
-      {!data && <div className="flex h-56 items-center justify-center text-sm text-muted-2">Reconstructing portfolio history…</div>}
+      {!data && (
+        <div className="flex h-56 items-center justify-center">
+          <div className="w-full max-w-xs">
+            <div className="flex items-baseline justify-between">
+              <span className="text-sm font-medium">
+                {progress < 0.35 ? "Reading your order history…" : progress < 0.7 ? "Fetching historical prices…" : "Rebuilding the timeline…"}
+              </span>
+              <span className="num text-xs text-muted-2">{Math.round(progress * 100)}%</span>
+            </div>
+            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-surface">
+              <div className="h-full rounded-full bg-[var(--primary)] transition-[width] duration-500 ease-out" style={{ width: `${Math.round(progress * 100)}%` }} />
+            </div>
+            <p className="mt-2 text-xs text-muted-2">Replaying every order against historical prices — cached afterwards, so this is a one-off.</p>
+          </div>
+        </div>
+      )}
 
       {data && (
         <>

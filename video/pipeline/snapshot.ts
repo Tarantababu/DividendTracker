@@ -5,6 +5,10 @@ import path from "node:path";
 import { episodeDir, fetchJson, isoWeekId, loadConfig, loadEnv, previousEpisodeDir, readJson, writeJson } from "./util.ts";
 // The app's FIRE math, reused directly so episode numbers match the /fire page exactly
 import { FIRE_TYPES, fireTarget, projectFire } from "../../lib/fire.ts";
+// The same market layer the Daily digest uses, so the weekly episode gets the
+// trend context, wider-market movers and sources the digest has — just framed
+// over a week instead of a day.
+import { fetchMacro, fetchMarketMovers, fetchMarketNews, type MacroQuote, type MarketMovers } from "../../lib/marketData.ts";
 
 interface DayPoint {
   date: string;
@@ -55,6 +59,14 @@ export interface EpisodeData {
   };
   lookthrough: Array<{ symbol: string; name: string; pct: number; funds: number }>;
   macro: { indices: MacroIndex[]; headlines: Array<{ title: string; source: string; date: string }> };
+  /** Digest-grade market context: full trend ladder per instrument (1w/1m/3m/1y,
+   *  52-week range position, distance from the 50/200-day averages). */
+  macroTrends: MacroQuote[];
+  /** Biggest large-cap moves in the US and Europe — names the viewer doesn't own,
+   *  used for sector colour rather than portfolio commentary. */
+  marketMovers: MarketMovers;
+  /** Every headline the episode was built from, so the description can cite them. */
+  sources: Array<{ title: string; url: string; source: string; date: string }>;
   holdingsNews: Array<{ ticker: string; name: string; headlines: Array<{ title: string; source: string; date: string }> }>;
   prevEpisode: {
     week: string;
@@ -97,6 +109,15 @@ async function main() {
     };
   });
   const news = await fetchJson<any>(`${B}/api/news?symbol=%5EGSPC&name=${encodeURIComponent("stock market this week")}`).catch(() => ({ items: [] }));
+
+  // Digest-grade market layer, fetched directly from the shared lib (no app server
+  // needed): trend ladder per index, plus the week's big US/European movers.
+  const [macroTrends, marketMovers, marketNews] = await Promise.all([
+    fetchMacro().catch(() => [] as MacroQuote[]),
+    fetchMarketMovers().catch(() => ({ usGainers: [], usLosers: [], euGainers: [], euLosers: [] }) as MarketMovers),
+    fetchMarketNews(28).catch(() => []),
+  ]);
+  console.log(`[snapshot] macro trends ${macroTrends.length} · movers ${marketMovers.usGainers.length + marketMovers.euGainers.length} up · ${marketNews.length} headlines`);
 
   // News around the actual holdings: top positions by value, a few headlines each
   const topPositions = [...overview.positions]
@@ -199,9 +220,19 @@ async function main() {
       dividendCoveragePct: monthlyExpenses > 0 ? (fire.dividendsMonthly12m / monthlyExpenses) * 100 : null,
     },
     lookthrough: (lookthrough?.stocks ?? []).slice(0, 5).map((s: any) => ({ symbol: s.symbol, name: s.name, pct: s.pct, funds: s.funds.length })),
+    macroTrends,
+    marketMovers,
+    // Google News RSS links are enormous redirect blobs — unusable in a YouTube
+    // description — so publisher-direct links are listed first.
+    sources: [...marketNews]
+      .sort((a, b) => Number(a.link.includes("news.google.com")) - Number(b.link.includes("news.google.com")))
+      .slice(0, 12)
+      .map((n) => ({ title: n.title, url: n.link, source: n.source, date: n.publishedAt.slice(0, 10) })),
     macro: {
       indices,
-      headlines: (news.items ?? []).slice(0, 8).map((n: any) => ({ title: n.title, source: n.source, date: n.publishedAt?.slice(0, 10) ?? "" })),
+      headlines: [...(news.items ?? []), ...marketNews]
+        .slice(0, 14)
+        .map((n: any) => ({ title: n.title, source: n.source, date: (n.publishedAt ?? "").slice(0, 10) })),
     },
     holdingsNews,
     prevEpisode: prev

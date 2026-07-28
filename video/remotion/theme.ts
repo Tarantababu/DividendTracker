@@ -1,18 +1,26 @@
-// Dark theme matching the app's palette (globals.css) so episodes look like the tool.
+// Dark counterpart of the app's Fintech-kit palette, so episodes look like the
+// tool on screen: the kit's own sidebar black as the canvas, its greens/reds for
+// direction, and the same restrained categorical hues used in the charts.
 export const T = {
-  bg: "#0c0e16",
-  card: "#161a2a",
-  cardBorder: "#232842",
-  text: "#f4f5fa",
-  muted: "#9aa0b8",
-  muted2: "#6b7089",
-  primary: "#6366f1",
-  accent: "#22c55e",
-  red: "#ef4444",
+  bg: "#0d0d12", // the kit's sidebar black
+  card: "#161821",
+  cardBorder: "#242733",
+  text: "#ffffff",
+  muted: "#a8adba",
+  muted2: "#7c8290",
+  primary: "#4f46e5",
+  accent: "#16a34a",
+  red: "#dc2626",
   blue: "#3b82f6",
-  amber: "#f59e0b",
+  amber: "#d97706",
+  teal: "#0d9488",
+  violet: "#7c3aed",
   font: "'Helvetica Neue', 'Arial', sans-serif",
 } as const;
+
+/** Category identity colours — same scale the app uses, so a category looks the
+ *  same in the video as on the dashboard. */
+export const CATEGORY_COLORS = ["#4f46e5", "#0891b2", "#d97706", "#7c3aed", "#0d9488", "#db2777", "#2563eb", "#65a30d"] as const;
 
 export const fmtEur = (v: number, digits = 0) =>
   new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR", maximumFractionDigits: digits }).format(v);

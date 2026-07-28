@@ -38,7 +38,11 @@ export interface VideoConfig {
 }
 
 export function loadConfig(): VideoConfig {
-  return JSON.parse(fs.readFileSync(path.join(VIDEO_ROOT, "config.json"), "utf8")) as VideoConfig;
+  const cfg = JSON.parse(fs.readFileSync(path.join(VIDEO_ROOT, "config.json"), "utf8")) as VideoConfig;
+  // The dev server isn't always on the configured port. APP_BASE_URL (env or
+  // .env.local) wins, so the pipeline works wherever the app happens to be running.
+  if (process.env.APP_BASE_URL) cfg.baseUrl = process.env.APP_BASE_URL.replace(/\/$/, "");
+  return cfg;
 }
 
 /** Load the app's .env.local into process.env (no dotenv dependency). */

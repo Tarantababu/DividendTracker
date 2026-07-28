@@ -55,3 +55,12 @@ a manual decision unless you add `--upload` to the plist arguments.
   macro indices, privacy mode.
 - `remotion/scenes.tsx` — the visual design of every scene.
 - `pipeline/script.ts` SYSTEM prompt — the narrator's voice and episode structure.
+
+## Running against a different port
+
+The pipeline reads the app's APIs from `config.json` → `baseUrl` (default
+`http://localhost:3000`). If your dev server is on another port, override it:
+
+```
+APP_BASE_URL=http://localhost:3212 npm run episode
+```

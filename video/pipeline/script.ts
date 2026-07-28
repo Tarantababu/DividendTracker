@@ -36,7 +36,11 @@ const SCHEMA = {
   type: "object",
   properties: {
     title: { type: "string", description: "YouTube title, <= 90 chars, concrete numbers welcome" },
-    description: { type: "string", description: "YouTube description: 2 short paragraphs + a chapter-less summary + the disclaimer. No hashtags spam." },
+    description: {
+      type: "string",
+      description:
+        "YouTube description: 2 short paragraphs + a chapter-less summary + the disclaimer. Then a 'This week's numbers' block with the key figures, and a 'Sources' list of 5-8 entries taken VERBATIM from data.sources as 'Title — url' (never invent a link). No hashtag spam.",
+    },
     tags: { type: "array", items: { type: "string" } },
     thumbnailText: { type: "string", description: "<= 4 words for the thumbnail, e.g. '+312 € THIS WEEK'" },
     segments: {
@@ -86,14 +90,14 @@ PACING & HOOKS:
 
 STRUCTURE (map to these scene kinds, in this order):
 1. title — the Hook: burning question / shocking number / relatable struggle + why it matters to the viewer.
-2. macro — the Big Picture, part 1: what kind of week the world's markets had (ONLY the provided indices + headlines), told as context for the story, with the emotional read for a dividend investor.
+2. macro — the Big Picture, part 1: what kind of week the world's markets had. Use 'macroTrends' for real trend context, not just the week's tick: where each index sits in its 52-week range, whether it's above or below its 50/200-day average, and how the 1-month/3-month/1-year picture frames this week. Explain the TRANSMISSION MECHANISM behind the biggest move (why higher yields hit long-duration growth, why a stronger dollar pressures commodities) so the viewer learns the plumbing, not just the number. Then give the emotional read for a dividend investor. Where it adds colour, name a big US or European mover from 'marketMovers' to show which sectors led or lagged — but NEVER imply I own those names.
 3. news — the Big Picture, part 2: what happened around MY actual holdings (from holdingsNews) — pick the 2-3 juiciest headlines, name the fund, say why it matters. Bridge into my numbers.
 4. stats — the Breakdown begins: portfolio value, the week's REAL market move (deposits stripped out), winners/losers. Story-driven, not a spreadsheet reading.
 5. chart — value vs invested: the gap is the market's contribution; tell this week's shape as a story.
 6. dividends — what landed, trailing 12 months, monthly average; make it tangible against a real-life expense using only data numbers.
 7. fire — the FIRE timeline: Regular + Dividend FIRE ETAs, dividend coverage of expenses; if prevEpisode exists, how the ETA moved. Let the long horizon be felt, not just stated.
 8. lookthrough (optional, when data present) — the "hidden portfolio" reveal: the same megacaps stacking up inside several ETFs.
-9. pivot — the Pivot/The Fix: the one honest lesson or thing to change next, drawn strictly from the data (e.g. idle cash, concentration, savings rate). What I'm doing about it before next week.
+9. pivot — the Lesson of the Week, in two halves. First TEACH one macro concept this week's data genuinely demonstrated (real yields, duration, the dollar's effect on a euro investor, covered-call NAV erosion, breadth, sector rotation…): explain it from first principles in plain English, define any jargon, then tie it to the exact numbers in macroTrends. Second, the honest personal fix drawn strictly from my data (idle cash, concentration, savings rate) and what I'm doing about it before next week. Vary the concept week to week — check prevEpisode so it isn't a repeat.
 10. outro — low-pressure CTA in the creator's voice (e.g. invite viewers to drop their own savings rate or FIRE number in the comments — no judgment, keep each other accountable) + verbatim: "None of this is financial advice — I'm sharing my personal journey. Do your own research."
 
 VISUALS:
