@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { formatMoney } from "@/lib/analytics";
 import type { DigestPayload, MoverNote } from "@/app/api/digest/route";
+import StoryRelationChart from "@/components/StoryRelationChart";
 
 // Today's digest is kept in localStorage so revisiting the page is instant and
 // never re-runs the (slow, paid) build. Only "Rebuild" fetches again.
@@ -295,6 +296,15 @@ export default function DigestPage() {
               </p>
             ))}
           </div>
+
+          {/* The relationships the story argued, shown rather than asserted. */}
+          {data.storyCharts?.length > 0 && (
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              {data.storyCharts.map((c) => (
+                <StoryRelationChart key={c.title} chart={c} macro={data.macro} />
+              ))}
+            </div>
+          )}
         </section>
       )}
 

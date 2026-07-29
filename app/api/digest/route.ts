@@ -36,6 +36,12 @@ export interface MoverNote {
   links: NewsItem[];
 }
 
+export interface StoryChart {
+  title: string;
+  symbols: string[]; // macro symbols to overlay, e.g. ["^TNX", "^IXIC"]
+  caption: string; // what the reader should notice, and why it matters
+}
+
 export interface LearnTopic {
   concept: string; // e.g. "The yield curve"
   explain: string; // plain-English explanation
@@ -52,6 +58,10 @@ export interface DigestPayload {
   /** The lead narrative: today told as one connected story — what happened, why,
    *  how it reached this portfolio, and what to expect. Paragraphs, not bullets. */
   story: string[];
+  /** Relationships the story argued, plotted so they can be seen rather than
+   *  asserted. Series are rebased to 100 at the start so instruments on wildly
+   *  different scales (a yield vs an index) are comparable on one axis. */
+  storyCharts: StoryChart[];
   education: LearnTopic[]; // daily macro lesson tied to what actually happened
   portfolio: {
     totalValue: number;
@@ -151,6 +161,7 @@ Return ONLY valid JSON (no markdown fence). Emit the keys in EXACTLY this order 
   "headline": "one punchy sentence (<=110 chars) summarising the day for this investor",
   "mood": "risk-on" | "risk-off" | "mixed" | "quiet",
   "story": ["paragraph", "paragraph", "..."],
+  "storyCharts": [ { "title": "...", "symbols": ["^TNX", "^IXIC"], "caption": "..." } ],
   "sections": [ /* see below */ ],
   "moverNotes": [ { "ticker": "AAPL", "why": "1-2 sentences: the most likely driver, tied to a headline or macro move given. Say 'no clear news — likely sector/market drift' when nothing explains it." } ],
   "education": [
@@ -171,6 +182,13 @@ Return ONLY valid JSON (no markdown fence). Emit the keys in EXACTLY this order 
 - Be honest about uncertainty: distinguish what the data shows from what is a plausible read, and say when a move has no clear explanation. Never invent a cause.
 - End the final paragraph on what to watch next and why it matters to a long-horizon dividend investor. No advice to buy or sell.
 - Every number must come from the data given.
+
+"storyCharts" — 2 or 3 charts that SHOW a relationship the story just argued, so the reader can see it rather than take your word for it. Rules:
+- Pick pairs (occasionally three) whose interaction you actually explained: a yield against a growth index, the dollar against gold or crypto, one region against another, volatility against equities.
+- "symbols" must be drawn ONLY from the symbols listed in MACRO TODAY. Use the exact symbol strings. Two per chart is usually clearest.
+- "title" names the relationship in a few words ("US 10-year yield vs Nasdaq").
+- "caption" is one or two sentences: what to look for in the lines, and what it implies for a dividend investor. Say plainly when the relationship broke down or is weak today — a chart that contradicts the usual story is worth showing and explaining.
+- Both series are rebased to 100 over the last year before plotting, so the reader compares SHAPE, not level. Write captions accordingly (talk about moving together or diverging, not about crossing).
 
 The "sections" array is exactly these six, in order:
     { "heading": "Macro picture", "body": "..." },
@@ -355,6 +373,7 @@ export async function GET(req: NextRequest) {
       headline: "",
       mood: "quiet",
       story: [],
+      storyCharts: [],
       education: [],
       portfolio: {
         totalValue: summary.totalValue,
@@ -487,6 +506,7 @@ export async function GET(req: NextRequest) {
         headline?: string;
         mood?: DigestPayload["mood"];
         story?: unknown;
+        storyCharts?: { title?: string; symbols?: unknown; caption?: string }[];
         moverNotes?: { ticker: string; why: string }[];
         sections?: DigestSection[];
         education?: LearnTopic[];
@@ -500,6 +520,17 @@ export async function GET(req: NextRequest) {
         .map((t) => t.trim())
         .filter(Boolean);
       base.sections = (p.sections ?? []).filter((s) => s?.heading && s?.body);
+      // Only keep charts we can actually draw: every symbol must exist in the macro
+      // set with usable history, otherwise the card would render an empty axis.
+      const plottable = new Set(base.macro.filter((m) => (m.history?.length ?? 0) > 2).map((m) => m.symbol));
+      base.storyCharts = (p.storyCharts ?? [])
+        .map((c) => ({
+          title: String(c?.title ?? "").trim(),
+          caption: String(c?.caption ?? "").trim(),
+          symbols: (Array.isArray(c?.symbols) ? c.symbols.map(String) : []).filter((sym) => plottable.has(sym)),
+        }))
+        .filter((c) => c.title && c.symbols.length >= 2)
+        .slice(0, 3);
       base.education = (p.education ?? [])
         .filter((t) => t?.concept && t?.explain)
         .map((t) => ({ ...t, readMore: (t.readMore ?? []).filter((r) => r?.url?.startsWith("https://")) }));

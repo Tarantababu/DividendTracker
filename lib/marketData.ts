@@ -98,11 +98,15 @@ export interface MacroQuote {
   pctOf52wRange: number | null; // 0 = at the 52w low, 100 = at the high
   vs50dma: number | null; // % above/below the 50-day average
   vs200dma: number | null; // % above/below the 200-day average
+  /** Downsampled 1-year closes, for plotting one instrument against another.
+   *  Kept small (~60 points) because this rides along in the digest payload. */
+  history: { d: string; c: number }[];
 }
 
 interface YahooChart {
   chart: {
     result?: Array<{
+      timestamp?: number[];
       meta?: { regularMarketPrice?: number; chartPreviousClose?: number; previousClose?: number; currency?: string };
       indicators?: { quote?: Array<{ close?: (number | null)[] }> };
     }>;
@@ -134,6 +138,7 @@ export async function fetchMacroQuote(symbol: string, name: string): Promise<Mac
     pctOf52wRange: null,
     vs50dma: null,
     vs200dma: null,
+    history: [],
   };
   try {
     // 1y of daily closes gives both today's move and the trend picture in one call.
@@ -144,7 +149,16 @@ export async function fetchMacroQuote(symbol: string, name: string): Promise<Mac
     if (!res.ok) return empty;
     const result = ((await res.json()) as YahooChart).chart.result?.[0];
     const meta = result?.meta;
-    const closes = (result?.indicators?.quote?.[0]?.close ?? []).filter((c): c is number => c != null);
+    const rawCloses = result?.indicators?.quote?.[0]?.close ?? [];
+    const stamps = result?.timestamp ?? [];
+    // Keep dates aligned with closes so two instruments can be plotted together.
+    const dated: { d: string; c: number }[] = [];
+    for (let i = 0; i < rawCloses.length; i++) {
+      const c = rawCloses[i];
+      const t = stamps[i];
+      if (c != null && t != null) dated.push({ d: new Date(t * 1000).toISOString().slice(0, 10), c });
+    }
+    const closes = dated.map((x) => x.c);
     const price = meta?.regularMarketPrice ?? closes.at(-1) ?? null;
     // NOT chartPreviousClose — on a 1y range that's the close a YEAR ago, which
     // would report the annual move as today's change. Yesterday's close only.
@@ -173,6 +187,8 @@ export async function fetchMacroQuote(symbol: string, name: string): Promise<Mac
       pctOf52wRange: low52 != null && high52 != null && high52 > low52 ? ((price - low52) / (high52 - low52)) * 100 : null,
       vs50dma: dma50 ? ((price - dma50) / dma50) * 100 : null,
       vs200dma: dma200 ? ((price - dma200) / dma200) * 100 : null,
+      // ~60 evenly spaced points: enough to read a trend, small enough to ship.
+      history: dated.filter((_, i) => i % Math.max(1, Math.ceil(dated.length / 60)) === 0 || i === dated.length - 1),
     };
   } catch {
     return empty;
