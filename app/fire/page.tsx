@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Area, CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { tooltipStyle } from "@/lib/chartTheme";
 import { formatMoney } from "@/lib/analytics";
+import { DEFAULT_GERMAN_TAX, combinedTaxRate } from "@/lib/tax";
 import { FIRE_TYPES, fireTarget, projectFire, type FireProjection, type FireType } from "@/lib/fire";
 import type { FirePayload } from "@/app/api/fire/route";
 import StatCard from "@/components/StatCard";
@@ -124,11 +125,27 @@ export default function FirePage() {
         inflationPct: settings.inflationPct,
         dividendYieldPct: yieldPct,
         reinvestDividends: settings.reinvestDividends,
-        dividendTaxPct: settings.dividendTaxPct,
+        dividendTax: DEFAULT_GERMAN_TAX,
       });
     }
     return out;
-  }, [data, effContribution, effReturn, yieldPct, effExpenses, settings.withdrawalRatePct, settings.leanPct, settings.fatMultiple, settings.baristaMonthlyIncome, settings.coastYears]);
+    // Every setting the projection reads must be listed, or changing it silently
+    // does nothing: inflation and the reinvest toggle were missing, which is why
+    // flipping "Reinvested" appeared to have no effect on the ETA.
+  }, [
+    data,
+    effContribution,
+    effReturn,
+    yieldPct,
+    effExpenses,
+    settings.withdrawalRatePct,
+    settings.leanPct,
+    settings.fatMultiple,
+    settings.baristaMonthlyIncome,
+    settings.coastYears,
+    settings.inflationPct,
+    settings.reinvestDividends,
+  ]);
 
   const cur = data?.currency ?? "EUR";
   const typeConfig = FIRE_TYPES.find((t) => t.key === settings.fireType)!;
@@ -400,7 +417,7 @@ export default function FirePage() {
               </button>
               <span className="mt-0.5 block text-[10px] text-muted-2">
                 {settings.reinvestDividends
-                  ? `compounding after ${settings.dividendTaxPct}% German tax`
+                  ? `compounding after tax — ${(combinedTaxRate(DEFAULT_GERMAN_TAX) * (1 - DEFAULT_GERMAN_TAX.partialExemptionPct / 100) * 100).toFixed(1)}% effective (30% Teilfreistellung, €${DEFAULT_GERMAN_TAX.annualAllowance} allowance)`
                   : "spent, so they never compound"}
               </span>
             </label>

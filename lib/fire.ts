@@ -1,4 +1,5 @@
 import type { CashTransaction } from "./t212";
+import { DEFAULT_GERMAN_TAX, taxOnIncome, type GermanTaxSettings } from "./tax";
 
 /** External money movements — everything else (interest, dividends) is internal return. */
 const CASHFLOW_TYPES = new Set(["DEPOSIT", "WITHDRAW", "WITHDRAWAL", "TRANSFER"]);
@@ -158,8 +159,11 @@ export interface FireInputs {
   dividendYieldPct?: number;
   /** Reinvest dividends (after tax) instead of taking them as cash. */
   reinvestDividends?: boolean;
-  /** Tax withheld on distributions — German default is ~26.4%. */
-  dividendTaxPct?: number;
+  /** German tax treatment of distributions. Uses the app's real model —
+   *  Teilfreistellung (30% of equity-fund income is exempt) and the annual
+   *  Sparerpauschbetrag — rather than a flat headline rate, which overstates the
+   *  drag on reinvestment by roughly a third. */
+  dividendTax?: GermanTaxSettings;
 }
 
 export interface FirePoint {
@@ -189,7 +193,7 @@ export function projectFire(inp: FireInputs): FireProjection {
   const totalReturn = inp.annualReturnPct / 100;
   const dividendYield = Math.max(0, inp.dividendYieldPct ?? 0) / 100;
   const reinvest = inp.reinvestDividends !== false; // default: reinvest
-  const divTax = Math.min(1, Math.max(0, (inp.dividendTaxPct ?? 0) / 100));
+  const tax = inp.dividendTax ?? DEFAULT_GERMAN_TAX;
 
   // The yield is the income slice OF the total return, so price growth is what's
   // left. Splitting them is what lets reinvestment (and its tax drag) matter.
@@ -198,6 +202,7 @@ export function projectFire(inp: FireInputs): FireProjection {
   const realDivRateM = dividendYield / 12 / (1 + inflation);
 
   let value = inp.currentValue;
+  let allowanceLeft = tax.annualAllowance;
   let contributed = 0;
   let monthsToTarget: number | null = value >= target ? 0 : null;
   const points: FirePoint[] = [];
@@ -205,11 +210,17 @@ export function projectFire(inp: FireInputs): FireProjection {
   let stopAt: number | null = monthsToTarget === 0 ? 12 : null;
 
   for (let m = 1; m <= maxMonths; m++) {
+    // Reset the tax-free allowance each calendar year of the projection.
+    if ((m - 1) % 12 === 0) allowanceLeft = tax.annualAllowance;
     const dividends = value * realDivRateM;
     value = value * realPriceGrowthM + inp.monthlyContribution;
-    // Reinvested dividends compound net of withholding; taken as cash they simply
-    // don't compound, which is exactly the drag this models.
-    if (reinvest) value += dividends * (1 - divTax);
+    // Reinvested dividends compound net of tax; taken as cash they don't compound
+    // at all, which is exactly the drag this models.
+    if (reinvest && dividends > 0) {
+      const { tax: due, allowanceUsed } = taxOnIncome(dividends, allowanceLeft, tax);
+      allowanceLeft -= allowanceUsed;
+      value += dividends - due;
+    }
     contributed += inp.monthlyContribution;
     if (monthsToTarget === null && value >= target) {
       monthsToTarget = m;
