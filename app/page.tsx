@@ -141,6 +141,16 @@ export default function Dashboard() {
     history.replaceState(null, "", id === "overview" ? window.location.pathname : `#${id}`);
   };
 
+  const loadFire = useCallback(async (refresh: boolean) => {
+    try {
+      const res = await fetch(`/api/fire${refresh ? "?refresh=1" : ""}`);
+      if (!res.ok) return;
+      setFire((await res.json()) as FirePayload);
+    } catch {
+      /* fall back to cost-basis numbers */
+    }
+  }, []);
+
   const load = useCallback(async (refresh: boolean) => {
     try {
       setProgress(0.12);
@@ -152,9 +162,12 @@ export default function Dashboard() {
       if (refresh) {
         invalidatePies(); // otherwise components keep the pies they loaded on mount
         sessionStorage.removeItem(SNAPSHOT_KEY);
-        // Rebuild the reconstruction in the background; the chart picks it up on
-        // its next fetch without holding up the headline numbers.
+        // Deposits, withdrawals and buys live in the transaction/order history,
+        // which is cached for 30 minutes — force those too, or "Refresh" would
+        // leave the Invested and total-return figures on stale cash movements.
+        loadFire(true);
         fetch("/api/portfolio-history?refresh=1").catch(() => {});
+        fetch("/api/events?refresh=1").catch(() => {});
       }
       const ovP = fetch(`/api/overview${q}`);
       const divP = fetch(`/api/dividends${q}`);
@@ -185,7 +198,7 @@ export default function Dashboard() {
       setLoading(false);
       setSyncing(false);
     }
-  }, []);
+  }, [loadFire]);
 
   // Ease the bar toward 90% while the (cold, ~30s) serverless fetch is in flight,
   // so it always feels alive even between the real milestones above.
@@ -215,21 +228,8 @@ export default function Dashboard() {
   // blocks the main render — the Invested/P&L cards upgrade from cost-basis to
   // net-deposit numbers once this lands.
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/fire");
-        if (!res.ok) return;
-        const j = (await res.json()) as FirePayload;
-        if (!cancelled) setFire(j);
-      } catch {
-        /* fall back to cost-basis numbers */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    loadFire(false);
+  }, [loadFire]);
 
   const stats = useMemo(() => {
     if (!overview || !dividends) return null;

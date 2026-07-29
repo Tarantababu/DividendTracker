@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getAccountSummary, syncDividends, syncTransactions, T212Error } from "@/lib/t212";
 import { contributionStats, externalCashflows, xirr } from "@/lib/fire";
 import { readBankCache } from "@/lib/bank";
@@ -40,9 +40,13 @@ async function loadBudget(): Promise<FireBudget | null> {
   }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  // Deposits and withdrawals come from the transaction history, which is cached
+  // for 30 minutes. A user-initiated refresh must re-pull it, or the "Invested"
+  // and total-return figures keep showing yesterday's cash movements.
+  const force = req.nextUrl.searchParams.get("refresh") === "1";
   try {
-    const [summary, tx, dividends, budget] = await Promise.all([getAccountSummary(), syncTransactions(false), syncDividends(false), loadBudget()]);
+    const [summary, tx, dividends, budget] = await Promise.all([getAccountSummary(), syncTransactions(force), syncDividends(force), loadBudget()]);
 
     const flows = externalCashflows(tx.items);
     const stats = contributionStats(flows);

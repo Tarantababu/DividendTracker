@@ -228,7 +228,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    return NextResponse.json(await refreshOnce(DISK_FILE, () => rebuild()));
+    return NextResponse.json(await refreshOnce(DISK_FILE, () => rebuild(force)));
   } catch (err) {
     if (err instanceof T212Error) return NextResponse.json({ error: err.code, message: err.message }, { status: err.code === "NO_CREDENTIALS" ? 428 : 502 });
     return NextResponse.json({ error: "UNKNOWN", message: String(err) }, { status: 500 });
@@ -236,7 +236,9 @@ export async function GET(req: NextRequest) {
 }
 
 /** The full reconstruction. Throws on failure so callers can decide how to degrade. */
-async function rebuild(): Promise<PortfolioHistoryPayload> {
+/** `forceSync` re-pulls the order history rather than using the 30-minute cache,
+ *  so a user-initiated refresh picks up buys/sells made since the last sync. */
+async function rebuild(forceSync = false): Promise<PortfolioHistoryPayload> {
   await loadChartDisk();
   const positions: Position[] = await getPositions();
 
@@ -294,7 +296,7 @@ async function rebuild(): Promise<PortfolioHistoryPayload> {
     // Sync (and cache) the order fills ourselves rather than reading a file another
     // route wrote — on Vercel each request may hit a fresh instance with an empty
     // /tmp, so relying on the file gave a degraded flat reconstruction there.
-    const ordersCache = await syncOrders(false);
+    const ordersCache = await syncOrders(forceSync);
     for (const it of ordersCache.items) {
       if (!it.fill?.filledAt) continue;
       const sign = it.order.side === "SELL" ? -1 : 1;

@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { syncDividends, syncOrders, syncTransactions, T212Error } from "@/lib/t212";
 import { prettyTicker } from "@/lib/analytics";
 
@@ -14,13 +14,14 @@ export interface PortfolioEvent {
   amount: number; // account currency
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const force = req.nextUrl.searchParams.get("refresh") === "1";
   const events: PortfolioEvent[] = [];
   const notes: string[] = [];
 
   // The three histories hit separate T212 endpoints with independent rate limits —
   // sync them in parallel so a cold cache stays well inside serverless time limits.
-  const [dividendsR, txR, ordersR] = await Promise.allSettled([syncDividends(false), syncTransactions(false), syncOrders(false)]);
+  const [dividendsR, txR, ordersR] = await Promise.allSettled([syncDividends(force), syncTransactions(force), syncOrders(force)]);
 
   // Dividends
   try {
