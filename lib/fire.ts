@@ -1,5 +1,5 @@
 import type { CashTransaction } from "./t212";
-import { DEFAULT_GERMAN_TAX, taxOnIncome, type GermanTaxSettings } from "./tax";
+import { DEFAULT_GERMAN_TAX, grossUpIncome, taxOnIncome, type GermanTaxSettings } from "./tax";
 
 /** External money movements — everything else (interest, dividends) is internal return. */
 const CASHFLOW_TYPES = new Set(["DEPOSIT", "WITHDRAW", "WITHDRAWAL", "TRANSFER"]);
@@ -117,20 +117,28 @@ export interface FireTargetInputs {
   baristaMonthlyIncome: number; // side income covering part of expenses
   coastYears: number; // years until you'd start drawing down
   inflationPct?: number; // discounts the Coast target in real terms
+  /** German tax on the income that funds retirement. Expenses are what you must
+   *  actually pay, so the target is sized on the GROSS income needed to net them. */
+  tax?: GermanTaxSettings;
 }
 
 /** The portfolio value each FIRE type requires. */
 export function fireTarget(type: FireType, inp: FireTargetInputs): number {
   const swr = Math.max(0.1, inp.withdrawalRatePct) / 100;
-  const annualExpenses = inp.monthlyExpenses * 12;
+  // Live on `monthlyExpenses` NET, so the portfolio has to throw off more than that
+  // before tax. Without this every target is undersized by the tax on its own income.
+  const grossUp = (net: number) => (inp.tax ? grossUpIncome(net, inp.tax) : net);
+  const annualExpenses = grossUp(inp.monthlyExpenses * 12);
   const regular = annualExpenses / swr;
   switch (type) {
     case "lean":
-      return (annualExpenses * Math.max(0, inp.leanPct)) / 100 / swr;
+      return grossUp((inp.monthlyExpenses * 12 * Math.max(0, inp.leanPct)) / 100) / swr;
     case "fat":
-      return (annualExpenses * Math.max(1, inp.fatMultiple)) / swr;
+      return grossUp(inp.monthlyExpenses * 12 * Math.max(1, inp.fatMultiple)) / swr;
     case "barista":
-      return Math.max(0, (inp.monthlyExpenses - inp.baristaMonthlyIncome) * 12) / swr;
+      // Only the shortfall the portfolio must cover is grossed up; the side income
+      // is earned income and outside this model.
+      return grossUp(Math.max(0, (inp.monthlyExpenses - inp.baristaMonthlyIncome) * 12)) / swr;
     case "dividend": {
       const y = Math.max(0.1, inp.portfolioYieldPct) / 100;
       return annualExpenses / y; // value whose dividends equal annual expenses

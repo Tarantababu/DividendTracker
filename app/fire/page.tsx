@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Area, CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { tooltipStyle } from "@/lib/chartTheme";
 import { formatMoney } from "@/lib/analytics";
-import { DEFAULT_GERMAN_TAX, combinedTaxRate } from "@/lib/tax";
+import { DEFAULT_GERMAN_TAX, combinedTaxRate, type GermanTaxSettings } from "@/lib/tax";
+import GermanTaxControls from "@/components/GermanTaxControls";
 import { FIRE_TYPES, fireTarget, projectFire, type FireProjection, type FireType } from "@/lib/fire";
 import type { FirePayload } from "@/app/api/fire/route";
 import StatCard from "@/components/StatCard";
@@ -23,7 +24,7 @@ interface FireSettings {
   coastYears: number; // years until drawdown, for Coast FIRE
   inflationPct: number; // projection runs in today's money
   reinvestDividends: boolean; // compound dividends (net of tax) instead of spending them
-  dividendTaxPct: number; // withholding on distributions — German default
+  tax: GermanTaxSettings; // same model the simulator uses
 }
 
 const FALLBACK_EXPENSES = 4285; // used when the user hasn't set a value
@@ -40,7 +41,7 @@ const DEFAULTS: FireSettings = {
   coastYears: 15,
   inflationPct: 2,
   reinvestDividends: true,
-  dividendTaxPct: 26.375, // Kapitalertragsteuer + Soli
+  tax: DEFAULT_GERMAN_TAX,
 };
 
 function num(v: string): number {
@@ -57,7 +58,8 @@ export default function FirePage() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
-        const s = { ...DEFAULTS, ...(JSON.parse(raw) as FireSettings) };
+        const parsed = JSON.parse(raw) as Partial<FireSettings>;
+        const s = { ...DEFAULTS, ...parsed, tax: { ...DEFAULT_GERMAN_TAX, ...(parsed.tax ?? {}) } };
         return s;
       }
     } catch {
@@ -108,6 +110,7 @@ export default function FirePage() {
       baristaMonthlyIncome: settings.baristaMonthlyIncome,
       coastYears: settings.coastYears,
       inflationPct: settings.inflationPct,
+      tax: settings.tax,
     };
     const out = {} as Record<FireType, FireProjection>;
     for (const t of FIRE_TYPES) {
@@ -121,7 +124,7 @@ export default function FirePage() {
         inflationPct: settings.inflationPct,
         dividendYieldPct: yieldPct,
         reinvestDividends: settings.reinvestDividends,
-        dividendTax: DEFAULT_GERMAN_TAX,
+        dividendTax: settings.tax,
       });
     }
     return out;
@@ -141,6 +144,7 @@ export default function FirePage() {
     settings.coastYears,
     settings.inflationPct,
     settings.reinvestDividends,
+    settings.tax,
   ]);
 
   const cur = data?.currency ?? "EUR";
@@ -407,10 +411,22 @@ export default function FirePage() {
               </button>
               <span className="mt-0.5 block text-[10px] text-muted-2">
                 {settings.reinvestDividends
-                  ? `compounding after tax — ${(combinedTaxRate(DEFAULT_GERMAN_TAX) * (1 - DEFAULT_GERMAN_TAX.partialExemptionPct / 100) * 100).toFixed(1)}% effective (30% Teilfreistellung, €${DEFAULT_GERMAN_TAX.annualAllowance} allowance)`
+                  ? settings.tax.enabled
+                    ? `compounding after tax — ${(combinedTaxRate(settings.tax) * (1 - settings.tax.partialExemptionPct / 100) * 100).toFixed(1)}% effective`
+                    : "compounding untaxed (tax disabled below)"
+
                   : "spent, so they never compound"}
               </span>
             </label>
+          </div>
+
+          {/* Same German tax model as the simulator, so both pages agree. */}
+          <div className="mt-4 rounded-xl border border-border bg-card p-4 shadow-xs sm:p-5">
+            <h2 className="text-sm font-semibold tracking-wide">German tax</h2>
+            <p className="mt-0.5 mb-3 text-xs text-muted-2">
+              Targets are sized on the income needed <em>after</em> tax, and reinvested dividends compound net of it.
+            </p>
+            <GermanTaxControls value={settings.tax} onChange={(tax) => setSettings((s) => ({ ...s, tax }))} />
           </div>
 
           {/* Projection chart */}

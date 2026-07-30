@@ -44,6 +44,25 @@ export function taxOnIncome(
 }
 
 /** Tax on realised gains at a one-off sale (one year's allowance applied). */
+/**
+ * The GROSS investment income needed to be left with `net` after German tax.
+ *
+ * FIRE targets are built from the expenses you must actually pay, but the income
+ * funding them is taxable — so a target sized on gross income leaves you short.
+ * Inverts taxOnIncome exactly (it's piecewise linear):
+ *   net = gross − max(0, gross·(1−exemption) − allowance)·rate
+ */
+export function grossUpIncome(net: number, s: GermanTaxSettings): number {
+  if (!s.enabled || net <= 0) return Math.max(0, net);
+  // Below the allowance nothing is due, so gross == net.
+  const assessableAtNet = net * (1 - s.partialExemptionPct / 100);
+  if (assessableAtNet <= s.annualAllowance) return net;
+  const rate = combinedTaxRate(s);
+  const k = 1 - (1 - s.partialExemptionPct / 100) * rate;
+  if (k <= 0) return net; // degenerate settings — don't divide by ~0
+  return (net - s.annualAllowance * rate) / k;
+}
+
 export function taxOnRealisedGains(gains: number, s: GermanTaxSettings): number {
   return taxOnIncome(gains, s.annualAllowance, s).tax;
 }
