@@ -2,7 +2,7 @@
 // episodes/<week>/data.json, with week-over-week deltas computed here so the
 // script stage never has to do arithmetic (Claude narrates, it doesn't calculate).
 import path from "node:path";
-import { episodeDir, fetchJson, isoWeekId, loadConfig, loadEnv, previousEpisodeDir, readJson, writeJson } from "./util.ts";
+import { episodeDir, fetchJson, isoWeekId, loadConfig, loadEnv, previousEpisodeDir, readJson, resolveBaseUrl, writeJson } from "./util.ts";
 // The app's FIRE math, reused directly so episode numbers match the /fire page exactly
 import { FIRE_TYPES, fireTarget, projectFire } from "../../lib/fire.ts";
 // The same market layer the Daily digest uses, so the weekly episode gets the
@@ -79,7 +79,7 @@ export interface EpisodeData {
 async function main() {
   loadEnv();
   const cfg = loadConfig();
-  const B = cfg.baseUrl;
+  const B = await resolveBaseUrl(cfg);
   const week = isoWeekId();
   const dir = episodeDir(week);
 

@@ -4,7 +4,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import puppeteer from "puppeteer-core";
-import { episodeDir, isoWeekId, loadConfig, VIDEO_ROOT, writeJson } from "./util.ts";
+import { episodeDir, isoWeekId, loadConfig, resolveBaseUrl, VIDEO_ROOT, writeJson } from "./util.ts";
 
 /** Find the Chrome Headless Shell Remotion downloaded on first render. */
 function findChrome(): string {
@@ -26,6 +26,7 @@ function findChrome(): string {
 
 async function main() {
   const cfg = loadConfig();
+  const base = await resolveBaseUrl(cfg);
   const week = isoWeekId();
   const dir = episodeDir(week);
   const shotsDir = path.join(dir, "shots");
@@ -43,7 +44,7 @@ async function main() {
   try {
     const page = await browser.newPage();
     for (const [key, route] of Object.entries(cfg.screenshots)) {
-      const url = `${cfg.baseUrl}${route}`;
+      const url = `${base}${route}`;
       try {
         await page.goto(url, { waitUntil: "networkidle2", timeout: 60_000 });
         // Let charts/animations settle (recharts renders after data fetches)

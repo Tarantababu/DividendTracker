@@ -45,6 +45,38 @@ export function loadConfig(): VideoConfig {
   return cfg;
 }
 
+/**
+ * Find the running dev server.
+ *
+ * Every stage reads the app over HTTP, so a wrong port fails with a bare
+ * "fetch failed" that says nothing about the cause. Probe the configured URL
+ * first, then the ports Next commonly lands on when 3000 is taken, and fail with
+ * a message that names what was tried.
+ */
+export async function resolveBaseUrl(cfg: VideoConfig): Promise<string> {
+  const candidates = [cfg.baseUrl, "http://localhost:3000", "http://localhost:3001", "http://localhost:3212"]
+    .map((u) => u.replace(/\/$/, ""))
+    .filter((u, i, a) => a.indexOf(u) === i);
+
+  for (const base of candidates) {
+    try {
+      const res = await fetch(`${base}/api/overview`, { method: "HEAD", signal: AbortSignal.timeout(4000) });
+      // Any HTTP answer proves something is listening and routing; 404/500 still
+      // means we found the app, and the real request will surface a real error.
+      if (res.status > 0) {
+        if (base !== cfg.baseUrl) console.log(`[pipeline] app not at ${cfg.baseUrl} — using ${base}`);
+        return base;
+      }
+    } catch {
+      /* not this one */
+    }
+  }
+  throw new Error(
+    `Could not reach the app on any of: ${candidates.join(", ")}. Start it with "npm run dev", ` +
+      `or set APP_BASE_URL (env or .env.local) to wherever it's running.`,
+  );
+}
+
 /** Load the app's .env.local into process.env (no dotenv dependency). */
 export function loadEnv(): void {
   const file = path.join(APP_ROOT, ".env.local");
