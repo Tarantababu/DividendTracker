@@ -13,10 +13,10 @@ const STORAGE_KEY = "dividend-tracker-fire-v1";
 
 interface FireSettings {
   fireType: FireType;
-  monthlyExpenses: number | null; // null = auto (real N26 spend, else fallback)
+  monthlyExpenses: number | null; // null = use the default below
   withdrawalRatePct: number;
   annualReturnPct: number | null; // null = use XIRR
-  monthlyContribution: number | null; // null = auto (N26 savings, else T212 12M avg)
+  monthlyContribution: number | null; // null = auto (T212 12M average)
   leanPct: number; // Lean expenses as % of base
   fatMultiple: number; // Fat expenses multiple
   baristaMonthlyIncome: number; // side income for Barista FIRE
@@ -26,7 +26,7 @@ interface FireSettings {
   dividendTaxPct: number; // withholding on distributions — German default
 }
 
-const FALLBACK_EXPENSES = 4285; // used only when neither N26 nor a user value is set
+const FALLBACK_EXPENSES = 4285; // used when the user hasn't set a value
 
 const DEFAULTS: FireSettings = {
   fireType: "regular",
@@ -58,8 +58,6 @@ export default function FirePage() {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const s = { ...DEFAULTS, ...(JSON.parse(raw) as FireSettings) };
-        // Legacy placeholder expenses → switch to auto so real N26 spend takes over
-        if (s.monthlyExpenses === FALLBACK_EXPENSES) s.monthlyExpenses = null;
         return s;
       }
     } catch {
@@ -91,13 +89,11 @@ export default function FirePage() {
 
   // Fall back to measured values where the user hasn't overridden.
   const effReturn = settings.annualReturnPct ?? (data?.xirrPct !== null && data?.xirrPct !== undefined ? Math.min(12, Math.max(0, data.xirrPct)) : 6);
-  // Expenses: user value → real N26 spend → placeholder. Contribution: user → N26 savings → T212 deposits.
-  const effExpenses = settings.monthlyExpenses ?? (data?.budget ? Math.round(data.budget.monthlyExpenses) : FALLBACK_EXPENSES);
-  const budgetContribution = data?.budget && data.budget.monthlyNet > 0 ? Math.round(data.budget.monthlyNet) : null;
-  const effContribution = settings.monthlyContribution ?? budgetContribution ?? Math.max(0, Math.round(data?.monthlyContribution12m ?? 0));
+  // Every input is either the user's own value or a default — deliberately no
+  // budget/N26 dependency, so this page never waits on the bank cache.
+  const effExpenses = settings.monthlyExpenses ?? FALLBACK_EXPENSES;
+  const effContribution = settings.monthlyContribution ?? Math.max(0, Math.round(data?.monthlyContribution12m ?? 0));
   const yieldPct = data && data.totalValue > 0 ? (data.dividends12m / data.totalValue) * 100 : 0;
-  const expensesFromN26 = settings.monthlyExpenses == null && !!data?.budget;
-  const contributionFromN26 = settings.monthlyContribution == null && budgetContribution != null;
 
   // Project every FIRE type; the selected one drives the chart, all of them fill the comparison table
   const projections = useMemo(() => {
@@ -335,12 +331,10 @@ export default function FirePage() {
                 className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-1.5 text-sm"
               />
               <span className="mt-0.5 block text-[10px] text-muted-2">
-                {expensesFromN26 ? (
-                  <span className="text-accent">auto: your real N26 spend</span>
-                ) : data?.budget ? (
-                  <button className="underline" onClick={() => setSettings((s) => ({ ...s, monthlyExpenses: null }))}>use N26 spend ({formatMoney(data.budget.monthlyExpenses, cur, 0)}/mo)</button>
+                {settings.monthlyExpenses == null ? (
+                  `default ${formatMoney(FALLBACK_EXPENSES, cur, 0)}/mo`
                 ) : (
-                  <a href="/budget" className="underline">connect N26 for real spend</a>
+                  <button className="underline" onClick={() => setSettings((s) => ({ ...s, monthlyExpenses: null }))}>reset to default</button>
                 )}
               </span>
             </label>
@@ -391,11 +385,7 @@ export default function FirePage() {
               />
               <span className="mt-0.5 block text-[10px] text-muted-2">
                 {settings.monthlyContribution === null ? (
-                  contributionFromN26 ? (
-                    <span className="text-accent">auto: your real N26 savings</span>
-                  ) : (
-                    `auto: your T212 12M average (${formatMoney(data.monthlyContribution12m, cur, 0)}/mo)`
-                  )
+                  `auto: your T212 12M average (${formatMoney(data.monthlyContribution12m, cur, 0)}/mo)`
                 ) : (
                   <button className="underline" onClick={() => setSettings((s) => ({ ...s, monthlyContribution: null }))}>reset to auto</button>
                 )}
